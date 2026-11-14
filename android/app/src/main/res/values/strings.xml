@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Pulse Health</string>
+    <string name="channel_name">پایش حیاتی سلامت</string>
+    <string name="channel_description">اعلان‌های سیستمی و هشدارهای پایش مداوم ضربان</string>
+</resources>
