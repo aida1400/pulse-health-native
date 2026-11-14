@@ -1,6 +1,6 @@
 import 'dart:math';
 import 'package:flutter/material.dart';
-import 'package:vibration/vibration.dart';
+import 'package:flutter/services.dart';
 
 class DynamicRomanticCanvas extends StatefulWidget {
   final String themeId;
@@ -41,11 +41,12 @@ class _DynamicRomanticCanvasState extends State<DynamicRomanticCanvas> with Sing
   }
 
   Future<void> _triggerHeartbeatHaptic() async {
-    final hasVib = await Vibration.hasVibrator();
-    if (hasVib == true) {
-      // Lub-Dub heart rhythm vibration (120ms vib, 150ms pause, 180ms vib)
-      Vibration.vibrate(pattern: [0, 120, 150, 180], intensities: [0, 128, 0, 255]);
-    }
+    try {
+      // Lub-Dub heart rhythm vibration (heavy impact, pause, medium impact)
+      await HapticFeedback.heavyImpact();
+      await Future.delayed(const Duration(milliseconds: 140));
+      await HapticFeedback.mediumImpact();
+    } catch (_) {}
   }
 
   @override
