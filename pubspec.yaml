@@ -1,5 +1,5 @@
 name: pulse_app
-description: "Pulse - Private, Encrypted, Camouflaged 1-to-1 Intimate Communication App"
+description: "Pulse - 100% Native Encrypted Stealth Communication Android App"
 publish_to: 'none'
 version: 1.0.0+1
 
@@ -12,31 +12,21 @@ dependencies:
   flutter_localizations:
     sdk: flutter
   
-  # Security & Biometrics
+  # Security & Real Hardware Biometrics
   local_auth: ^2.1.8
   encrypt: ^5.0.3
   crypto: ^3.0.3
   shared_preferences: ^2.2.2
   
-  # Sensors & Hardware (Flip Face-Down, Shake, Haptics)
+  # Sensors & Hardware (Flip Face-Down, Shake, Haptic Heartbeat)
   sensors_plus: ^5.0.1
-  proximity_sensor: ^1.2.0
   vibration: ^2.0.0
-  camera: ^0.10.5+9
-  
-  # Notifications & Background Services
-  flutter_local_notifications: ^17.1.0
-  workmanager: ^0.5.2
   wakelock_plus: ^1.2.1
   
-  # Serverless Realtime Sync (Firebase & Supabase free tier ready)
-  firebase_core: ^2.27.0
-  firebase_messaging: ^14.7.19
-  firebase_database: ^10.4.9
-  http: ^1.2.0
-  
-  # Audio
+  # Native Notifications & Audio
+  flutter_local_notifications: ^17.1.0
   audioplayers: ^6.0.0
+  http: ^1.2.0
 
 dev_dependencies:
   flutter_test:
