@@ -37,13 +37,25 @@ jobs:
           cp -rf android/app/src/main/res/raw /tmp/pulse_native_backup/ 2>/dev/null || true
           cp -rf android/app/src/main/res/values /tmp/pulse_native_backup/ 2>/dev/null || true
 
-      - name: Scaffold Standard Android Gradle Wrapper
+      - name: Scaffold Standard Android Gradle Wrapper & Configure Desugaring
         run: |
           flutter create . --org com.pulse --project-name pulse_app --platforms=android
-          # Handle both build.gradle and build.gradle.kts
-          find android -name "build.gradle*" -exec sed -i 's/minSdk = flutter.minSdkVersion/minSdk = 23/g' {} + || true
-          find android -name "build.gradle*" -exec sed -i 's/minSdkVersion = flutter.minSdkVersion/minSdkVersion = 23/g' {} + || true
-          find android -name "build.gradle*" -exec sed -i 's/minSdkVersion flutter.minSdkVersion/minSdkVersion 23/g' {} + || true
+          python3 -c '
+          import glob
+          for f in glob.glob("android/app/build.gradle*"):
+              with open(f, "r") as fp:
+                  c = fp.read()
+              c = c.replace("flutter.minSdkVersion", "23")
+              if "coreLibraryDesugaring" not in c:
+                  c = c.replace("compileOptions {", "compileOptions {\n        coreLibraryDesugaringEnabled true\n        isCoreLibraryDesugaringEnabled = true")
+                  if "dependencies {" in c:
+                      c = c.replace("dependencies {", "dependencies {\n    coreLibraryDesugaring \"com.android.tools:desugar_jdk_libs:2.0.4\"")
+                  else:
+                      c += "\ndependencies {\n    coreLibraryDesugaring \"com.android.tools:desugar_jdk_libs:2.0.4\"\n}\n"
+              with open(f, "w") as fp:
+                  fp.write(c)
+          print("Build.gradle configured for desugaring & minSdk 23!")
+          '
 
       - name: Inject Custom Native Logic & Manifest
         run: |
