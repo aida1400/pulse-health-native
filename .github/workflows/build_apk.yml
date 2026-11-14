@@ -40,10 +40,10 @@ jobs:
       - name: Scaffold Standard Android Gradle Wrapper
         run: |
           flutter create . --org com.pulse --project-name pulse_app --platforms=android
-          # Set minSdkVersion to 23 to satisfy Proximity Sensor and Biometrics plugins
-          sed -i 's/minSdkVersion flutter.minSdkVersion/minSdkVersion 23/g' android/app/build.gradle || true
-          sed -i 's/minSdkVersion = flutter.minSdkVersion/minSdkVersion = 23/g' android/app/build.gradle || true
-          sed -i 's/minSdkVersion [0-9]*/minSdkVersion 23/g' android/app/build.gradle || true
+          # Handle both build.gradle and build.gradle.kts
+          find android -name "build.gradle*" -exec sed -i 's/minSdk = flutter.minSdkVersion/minSdk = 23/g' {} + || true
+          find android -name "build.gradle*" -exec sed -i 's/minSdkVersion = flutter.minSdkVersion/minSdkVersion = 23/g' {} + || true
+          find android -name "build.gradle*" -exec sed -i 's/minSdkVersion flutter.minSdkVersion/minSdkVersion 23/g' {} + || true
 
       - name: Inject Custom Native Logic & Manifest
         run: |
@@ -75,7 +75,7 @@ jobs:
         with:
           tag_name: v1.0.0
           name: Pulse Health Native v1.0.0
-          body: "Official 100% Native Android Build for Pulse Health. Features: Hardware Biometrics, Persistent Notifications, Stealth Decoy, Time-Capsule."
+          body: "Official 100% Native Android Build for Pulse Health. Features: Real Hardware Biometrics, Persistent Background Notifications, Stealth Decoy, Time-Capsule."
           files: build/app/outputs/flutter-apk/Pulse_Health_Native.apk
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
