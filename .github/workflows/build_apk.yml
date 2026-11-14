@@ -41,9 +41,10 @@ jobs:
       - name: Scaffold Standard Android Gradle Wrapper
         run: |
           flutter create . --org com.pulse --project-name pulse_app --platforms=android
-          # Set minSdkVersion to 21 to satisfy Camera and Biometrics plugins
-          sed -i 's/minSdkVersion flutter.minSdkVersion/minSdkVersion 21/g' android/app/build.gradle || true
-          sed -i 's/minSdkVersion = flutter.minSdkVersion/minSdkVersion = 21/g' android/app/build.gradle || true
+          # Set minSdkVersion to 23 to satisfy Proximity Sensor and Biometrics plugins
+          sed -i 's/minSdkVersion flutter.minSdkVersion/minSdkVersion 23/g' android/app/build.gradle || true
+          sed -i 's/minSdkVersion = flutter.minSdkVersion/minSdkVersion = 23/g' android/app/build.gradle || true
+          sed -i 's/minSdkVersion [0-9]*/minSdkVersion 23/g' android/app/build.gradle || true
 
       - name: Inject Custom Native Logic & Manifest
         run: |
