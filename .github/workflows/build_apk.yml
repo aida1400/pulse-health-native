@@ -1,0 +1,78 @@
+name: Build Pulse Native Android APK
+
+on:
+  push:
+    branches: [ main, master ]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    name: Compile 100% Native Android APK
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Set up Java Development Kit (JDK 17)
+        uses: actions/setup-java@v3
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+
+      - name: Set up Flutter Engine
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.19.6'
+          channel: 'stable'
+          cache: true
+
+      - name: Preserve Custom Native Assets
+        run: |
+          mkdir -p /tmp/pulse_native_backup
+          cp -f android/app/src/main/AndroidManifest.xml /tmp/pulse_native_backup/AndroidManifest.xml 2>/dev/null || true
+          cp -rf android/app/src/main/kotlin /tmp/pulse_native_backup/ 2>/dev/null || true
+          cp -rf android/app/src/main/res/raw /tmp/pulse_native_backup/ 2>/dev/null || true
+          cp -rf android/app/src/main/res/values /tmp/pulse_native_backup/ 2>/dev/null || true
+
+      - name: Scaffold Standard Android Gradle Wrapper
+        run: |
+          flutter create . --org com.pulse --project-name pulse_app --platforms=android
+
+      - name: Inject Custom Native Logic & Manifest
+        run: |
+          cp -f /tmp/pulse_native_backup/AndroidManifest.xml android/app/src/main/AndroidManifest.xml
+          cp -rf /tmp/pulse_native_backup/kotlin/* android/app/src/main/kotlin/
+          mkdir -p android/app/src/main/res/raw
+          cp -rf /tmp/pulse_native_backup/raw/* android/app/src/main/res/raw/
+          cp -rf /tmp/pulse_native_backup/values/* android/app/src/main/res/values/
+
+      - name: Resolve Dependencies
+        run: flutter pub get
+
+      - name: Compile Release APK
+        run: flutter build apk --release
+
+      - name: Rename APK Output
+        run: |
+          cp build/app/outputs/flutter-apk/app-release.apk build/app/outputs/flutter-apk/Pulse_Health_Native.apk
+
+      - name: Upload APK Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: Pulse_Health_Native_APK
+          path: build/app/outputs/flutter-apk/Pulse_Health_Native.apk
+          retention-days: 30
+
+      - name: Publish GitHub Release
+        uses: softprops/action-gh-release@v1
+        with:
+          tag_name: v1.0.0
+          name: Pulse Health Native v1.0.0
+          body: "Official 100% Native Android Build for Pulse Health. Features: Hardware Biometrics, Persistent Notifications, Stealth Decoy, Time-Capsule."
+          files: build/app/outputs/flutter-apk/Pulse_Health_Native.apk
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
