@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'package:crypto/crypto.dart';
 import 'package:http/http.dart' as http;
 import '../pairing/pairing_manager.dart';
+import '../profile/contact_manager.dart';
 import '../time_capsule/time_capsule_service.dart';
 import '../notifications/unkillable_notification_service.dart';
 
@@ -48,8 +49,9 @@ class ServerlessRelayAdapter {
   /// Sends a message payload to partner's inbox topic
   static Future<bool> sendMessage({
     required PulseMessageModel message,
+    String? targetPartnerCode,
   }) async {
-    final partnerCode = await PairingManager.getPartnerCode();
+    final partnerCode = targetPartnerCode ?? await PairingManager.getPartnerCode();
     if (partnerCode == null || partnerCode.isEmpty) {
       return false;
     }
@@ -66,18 +68,20 @@ class ServerlessRelayAdapter {
       'particleType': message.particleType,
       'scheduledUnlockTime': message.scheduledUnlockTime.toIso8601String(),
       'status': 'sent',
+      'isCanvas': message.isCanvas,
       'createdAt': message.createdAt.toIso8601String(),
     };
 
-    return await _dispatchRaw(targetTopic, payload);
+    return await _dispatchRaw(targetTopic, payload, partnerCode: partnerCode);
   }
 
   /// Sends delivery or seen receipt back to partner
   static Future<bool> sendReceipt({
     required String messageId,
     required String receiptStatus, // 'delivered' or 'seen'
+    String? targetPartnerCode,
   }) async {
-    final partnerCode = await PairingManager.getPartnerCode();
+    final partnerCode = targetPartnerCode ?? await PairingManager.getPartnerCode();
     final myCode = await PairingManager.getOrCreateMyCode();
     if (partnerCode == null || partnerCode.isEmpty) return false;
 
@@ -90,15 +94,16 @@ class ServerlessRelayAdapter {
       'timestamp': DateTime.now().toIso8601String(),
     };
 
-    return await _dispatchRaw(targetTopic, payload);
+    return await _dispatchRaw(targetTopic, payload, partnerCode: partnerCode);
   }
 
   /// Sends reaction emoji to partner
   static Future<bool> sendReaction({
     required String messageId,
     required String reactionEmoji,
+    String? targetPartnerCode,
   }) async {
-    final partnerCode = await PairingManager.getPartnerCode();
+    final partnerCode = targetPartnerCode ?? await PairingManager.getPartnerCode();
     final myCode = await PairingManager.getOrCreateMyCode();
     if (partnerCode == null || partnerCode.isEmpty) return false;
 
@@ -110,13 +115,21 @@ class ServerlessRelayAdapter {
       'senderCode': myCode,
     };
 
-    return await _dispatchRaw(targetTopic, payload);
+    return await _dispatchRaw(targetTopic, payload, partnerCode: partnerCode);
+  }
+
+  /// Derives symmetric secret key for a specific partner code
+  static Future<String> _deriveSecretForPartner(String partnerCode) async {
+    final myCode = await PairingManager.getOrCreateMyCode();
+    final combined = [myCode, partnerCode.trim().toUpperCase()]..sort();
+    final bytes = utf8.encode(combined.join(':'));
+    return sha256.convert(bytes).toString();
   }
 
   /// Internal HTTP POST to ntfy.sh
-  static Future<bool> _dispatchRaw(String topic, Map<String, dynamic> payload) async {
+  static Future<bool> _dispatchRaw(String topic, Map<String, dynamic> payload, {required String partnerCode}) async {
     try {
-      final sharedSecret = await PairingManager.deriveSharedSecretKey();
+      final sharedSecret = await _deriveSecretForPartner(partnerCode);
       final rawJson = jsonEncode(payload);
 
       // Symmetrically sign and pack payload
@@ -164,7 +177,6 @@ class ServerlessRelayAdapter {
 
       if (response.statusCode == 200 && response.body.isNotEmpty) {
         final lines = response.body.trim().split('\n');
-        final sharedSecret = await PairingManager.deriveSharedSecretKey();
 
         for (var line in lines) {
           if (line.trim().isEmpty) continue;
@@ -185,17 +197,19 @@ class ServerlessRelayAdapter {
 
             if (cipherBody == null || sig == null) continue;
 
-            // Verify signature
-            final expectedSig = sha256.convert(utf8.encode(cipherBody + sharedSecret)).toString();
-            if (sig != expectedSig) {
-              // Not from our paired partner or invalid signature!
-              continue;
-            }
-
-            // Decrypt
+            // Decrypt candidate body to extract senderCode
             final decodedBytes = base64Decode(cipherBody);
             final decodedStr = utf8.decode(decodedBytes);
             final Map<String, dynamic> payload = jsonDecode(decodedStr);
+            final senderCode = payload['senderCode']?.toString() ?? '';
+
+            // Verify signature using the sender's shared key
+            final sharedSecret = await _deriveSecretForPartner(senderCode.isNotEmpty ? senderCode : (await PairingManager.getPartnerCode() ?? ''));
+            final expectedSig = sha256.convert(utf8.encode(cipherBody + sharedSecret)).toString();
+            if (sig != expectedSig) {
+              // Invalid signature!
+              continue;
+            }
 
             if (ntfyId.isNotEmpty) {
               _processedPayloadIds.add(ntfyId);
@@ -218,23 +232,27 @@ class ServerlessRelayAdapter {
     if (type == 'message') {
       final msg = PulseMessageModel.fromJson(payload, overrideIsSender: false);
 
-      // Check if message already in vault
-      final existing = TimeCapsuleService.getAllMessages().any((e) => e.id == msg.id);
-      if (!existing) {
-        msg.status = 'delivered';
-        await TimeCapsuleService.saveToVault(msg);
+      // Check if this sender matches an existing contact
+      final matchedContact = ContactManager.findContactByCode(msg.senderCode);
+      final targetContactId = matchedContact?.id ?? TimeCapsuleService.activeContactId;
 
-        // 1. Show camouflaged high-priority notification!
-        await UnkillableNotificationService.showCamouflagedNotification(
-          id: msg.id.hashCode,
-          category: msg.category,
-        );
+      msg.status = 'delivered';
+      await TimeCapsuleService.saveToContactVault(targetContactId, msg);
 
-        // 2. Automatically return delivery receipt to partner!
-        await sendReceipt(messageId: msg.id, receiptStatus: 'delivered');
+      // 1. Show camouflaged high-priority notification!
+      await UnkillableNotificationService.showCamouflagedNotification(
+        id: msg.id.hashCode,
+        category: msg.category,
+      );
 
-        _onNewMessageCallback?.call();
-      }
+      // 2. Automatically return delivery receipt to this specific sender!
+      await sendReceipt(
+        messageId: msg.id,
+        receiptStatus: 'delivered',
+        targetPartnerCode: msg.senderCode,
+      );
+
+      _onNewMessageCallback?.call();
     } else if (type == 'receipt') {
       final messageId = payload['messageId'];
       final receiptStatus = payload['receiptStatus'] ?? 'delivered';

@@ -5,17 +5,26 @@ import '../time_capsule/time_capsule_service.dart';
 import '../serverless/serverless_relay_adapter.dart';
 import '../canvas/dynamic_romantic_canvas.dart';
 import '../pairing/pairing_manager.dart';
+import '../profile/contact_manager.dart';
+import '../profile/pulse_navigation_drawer.dart';
+import '../profile/user_dashboard_dialog.dart';
 
 class ChatScreen extends StatefulWidget {
   final VoidCallback onEmergencyPanic;
+  final VoidCallback? onContactSwitched;
 
-  const ChatScreen({Key? key, required this.onEmergencyPanic}) : super(key: key);
+  const ChatScreen({
+    Key? key,
+    required this.onEmergencyPanic,
+    this.onContactSwitched,
+  }) : super(key: key);
 
   @override
   State<ChatScreen> createState() => _ChatScreenState();
 }
 
 class _ChatScreenState extends State<ChatScreen> {
+  final GlobalKey<ScaffoldState> _scaffoldKey = GlobalKey<ScaffoldState>();
   final ScrollController _scrollController = ScrollController();
   final TextEditingController _msgInputController = TextEditingController();
   final Map<String, GlobalKey> _dateHeaderKeys = {};
@@ -92,25 +101,31 @@ class _ChatScreenState extends State<ChatScreen> {
     if (text.isEmpty) return;
 
     final myCode = await PairingManager.getOrCreateMyCode();
+    final activeContact = ContactManager.getActiveContact();
+
     final newMsg = PulseMessageModel(
       id: DateTime.now().millisecondsSinceEpoch.toString(),
       content: text,
-      category: 'romantic',
-      themeId: 'heart',
-      customBgColor: '#2D0B1E',
-      particleType: 'heart',
+      category: 'چت کوتاه',
+      themeId: 'chat_text',
+      customBgColor: '#1E1428',
+      particleType: 'none',
       scheduledUnlockTime: DateTime.now(),
       status: 'sent',
       senderCode: myCode,
       isSender: true,
       createdAt: DateTime.now(),
+      isCanvas: false, // Standard Chat Bubble
     );
 
     await TimeCapsuleService.saveToVault(newMsg);
-    await ServerlessRelayAdapter.sendMessage(message: newMsg);
+    await ServerlessRelayAdapter.sendMessage(
+      message: newMsg,
+      targetPartnerCode: activeContact?.partnerCode,
+    );
 
     _msgInputController.clear();
-    _loadMessages();
+    _loadMessages(forceScroll: true);
   }
 
   void _openCalendarPicker() {
@@ -209,32 +224,74 @@ class _ChatScreenState extends State<ChatScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final activeContact = ContactManager.getActiveContact();
+
     return Scaffold(
+      key: _scaffoldKey,
       backgroundColor: const Color(0xFF0E0715),
+      drawer: PulseNavigationDrawer(
+        onEmergencyPanic: widget.onEmergencyPanic,
+        onContactSwitched: () {
+          _loadMessages(forceScroll: true);
+          widget.onContactSwitched?.call();
+          setState(() {});
+        },
+      ),
       appBar: AppBar(
         backgroundColor: const Color(0xFF1B0B27),
         elevation: 0,
-        title: Row(
-          children: [
-            Container(
-              width: 10,
-              height: 10,
-              decoration: const BoxDecoration(
-                color: Color(0xFF10B981),
-                shape: BoxShape.circle,
+        leading: IconButton(
+          icon: const Icon(Icons.menu_rounded, color: Colors.white, size: 24),
+          tooltip: 'منوی کاربری و مخاطبان (مانند اسنپ)',
+          onPressed: () => _scaffoldKey.currentState?.openDrawer(),
+        ),
+        title: GestureDetector(
+          onTap: () => _scaffoldKey.currentState?.openDrawer(),
+          child: Row(
+            children: [
+              Container(
+                width: 9,
+                height: 9,
+                decoration: const BoxDecoration(
+                  color: Color(0xFF10B981),
+                  shape: BoxShape.circle,
+                ),
               ),
-            ),
-            const SizedBox(width: 8),
-            const Text(
-              'چت محرمانه پالس',
-              style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold),
-            ),
-          ],
+              const SizedBox(width: 8),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'گفتگو با: ${activeContact?.name ?? "پارتنر"}',
+                      style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold),
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                    Text(
+                      'کد متصل: ${activeContact?.partnerCode.isEmpty ?? true ? "تنظیم نشده" : activeContact!.partnerCode}',
+                      style: TextStyle(fontSize: 10, color: const Color(0xFFFB7185).withOpacity(0.9)),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
         ),
         actions: [
+          // Dashboard button
+          IconButton(
+            icon: const Icon(Icons.dashboard_outlined, color: Color(0xFFFB7185)),
+            tooltip: 'داشبورد کدهای جفت‌سازی',
+            onPressed: () {
+              UserDashboardDialog.show(context, onDataChanged: () {
+                _loadMessages();
+                setState(() {});
+              });
+            },
+          ),
           // Calendar Jump Button
           IconButton(
-            icon: const Icon(Icons.calendar_month_outlined, color: Color(0xFFFB7185)),
+            icon: const Icon(Icons.calendar_month_outlined, color: Color(0xFF38BDF8)),
             tooltip: 'تقویم شمسی و پرش به روز خاص',
             onPressed: _openCalendarPicker,
           ),
@@ -312,12 +369,12 @@ class _ChatScreenState extends State<ChatScreen> {
             Icon(Icons.mark_email_unread_outlined, size: 54, color: Colors.white.withOpacity(0.2)),
             const SizedBox(height: 16),
             const Text(
-              'هنوز پیامی رد و بدل نشده است',
+              'هنوز پیامی در این فضا رد و بدل نشده است',
               style: TextStyle(color: Colors.white60, fontSize: 14),
             ),
             const SizedBox(height: 6),
             const Text(
-              'اولین پالس عاشقانه را برای پارتنر خود ارسال کنید ❤️',
+              'اولین پالس عاشقانه یا پیام را ارسال کنید ❤️',
               style: TextStyle(color: Colors.white38, fontSize: 12),
             ),
           ],
@@ -326,70 +383,256 @@ class _ChatScreenState extends State<ChatScreen> {
     );
   }
 
+  /// Selects appropriate visual representation based on whether message is a Romantic Canvas or Plain Chat
   Widget _buildMessageBubble(PulseMessageModel msg) {
+    if (msg.isCanvas) {
+      return _buildRomanticCanvasCard(msg);
+    } else {
+      return _buildStandardChatBubble(msg);
+    }
+  }
+
+  /// 1. Ornate Romantic Canvas Card (پیام‌های بوم آماده با رنگ اختصاصی، پارتیکل متحرک و دکمه مشاهده تمام‌صفحه)
+  Widget _buildRomanticCanvasCard(PulseMessageModel msg) {
+    final isMe = msg.isSender;
+
+    Color baseColor;
+    try {
+      baseColor = Color(int.parse(msg.customBgColor.replaceFirst('#', '0xFF')));
+    } catch (_) {
+      baseColor = const Color(0xFF2D0B1E);
+    }
+
+    String particleLabel;
+    IconData particleIcon;
+    switch (msg.particleType) {
+      case 'candle':
+        particleLabel = 'بوم اشک شمع 🕯️';
+        particleIcon = Icons.water_drop_outlined;
+        break;
+      case 'heart':
+        particleLabel = 'بوم فوران قلب 💖';
+        particleIcon = Icons.favorite_rounded;
+        break;
+      case 'rose':
+        particleLabel = 'بوم گلبرگ رز 🌹';
+        particleIcon = Icons.local_florist_rounded;
+        break;
+      case 'star':
+        particleLabel = 'بوم ستاره‌های شب ✨';
+        particleIcon = Icons.auto_awesome_rounded;
+        break;
+      case 'fire':
+        particleLabel = 'بوم جرقه‌های آتش 🔥';
+        particleIcon = Icons.local_fire_department_rounded;
+        break;
+      default:
+        particleLabel = 'بوم عاشقانه پویا';
+        particleIcon = Icons.palette_outlined;
+    }
+
+    return Align(
+      alignment: isMe ? Alignment.centerRight : Alignment.centerLeft,
+      child: Container(
+        margin: const EdgeInsets.symmetric(vertical: 8),
+        constraints: BoxConstraints(maxWidth: MediaQuery.of(context).size.width * 0.86),
+        child: Column(
+          crossAxisAlignment: isMe ? CrossAxisAlignment.end : CrossAxisAlignment.start,
+          children: [
+            Container(
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                  colors: [
+                    baseColor.withOpacity(0.95),
+                    baseColor.withOpacity(0.65),
+                    const Color(0xFF14051D),
+                  ],
+                ),
+                borderRadius: BorderRadius.circular(22),
+                border: Border.all(
+                  color: const Color(0xFFFB7185).withOpacity(0.6),
+                  width: 1.5,
+                ),
+                boxShadow: [
+                  BoxShadow(
+                    color: baseColor.withOpacity(0.5),
+                    blurRadius: 14,
+                    offset: const Offset(0, 4),
+                  ),
+                ],
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  // Top Ornate Badge Row
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                        decoration: BoxDecoration(
+                          color: Colors.black38,
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(color: Colors.white24),
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(particleIcon, color: const Color(0xFFFB7185), size: 14),
+                            const SizedBox(width: 5),
+                            Text(
+                              particleLabel,
+                              style: const TextStyle(
+                                color: Colors.white,
+                                fontSize: 11,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFFB7185).withOpacity(0.2),
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: Text(
+                          'دسته: ${msg.category}',
+                          style: const TextStyle(
+                            color: Color(0xFFFB7185),
+                            fontSize: 10,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 12),
+
+                  // Message Text with rich romantic typography
+                  Text(
+                    msg.content,
+                    textDirection: TextDirection.rtl,
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 15.5,
+                      height: 1.5,
+                      fontWeight: FontWeight.w600,
+                      shadows: [
+                        Shadow(color: Colors.black54, blurRadius: 4, offset: Offset(0, 1)),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 14),
+
+                  // Interactive "View Fullscreen Live Canvas" Button
+                  ElevatedButton.icon(
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.white.withOpacity(0.15),
+                      elevation: 0,
+                      padding: const EdgeInsets.symmetric(vertical: 8),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
+                        side: BorderSide(color: Colors.white.withOpacity(0.3)),
+                      ),
+                    ),
+                    onPressed: () => _openMessageCanvas(msg),
+                    icon: const Icon(Icons.play_circle_fill_rounded, color: Color(0xFFFB7185), size: 18),
+                    label: const Text(
+                      'مشاهده بوم زنده (تمام‌صفحه)',
+                      style: TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold),
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+
+                  // Meta: Time, Status
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.end,
+                    children: [
+                      Text(
+                        PersianDateHelper.formatTime(msg.createdAt),
+                        style: TextStyle(color: Colors.white.withOpacity(0.6), fontSize: 10),
+                      ),
+                      if (isMe) ...[
+                        const SizedBox(width: 4),
+                        _buildStatusIcon(msg),
+                      ],
+                    ],
+                  ),
+                ],
+              ),
+            ),
+
+            // Reactions Display & Picker
+            _buildReactionsSection(msg),
+          ],
+        ),
+      ),
+    );
+  }
+
+  /// 2. Standard Sleek Chat Bubble (حباب‌های چت سریع و متنی بدون پس‌زمینه بوم)
+  Widget _buildStandardChatBubble(PulseMessageModel msg) {
     final isMe = msg.isSender;
 
     return Align(
       alignment: isMe ? Alignment.centerRight : Alignment.centerLeft,
       child: Container(
-        margin: const EdgeInsets.symmetric(vertical: 6),
-        constraints: BoxConstraints(maxWidth: MediaQuery.of(context).size.width * 0.82),
+        margin: const EdgeInsets.symmetric(vertical: 4),
+        constraints: BoxConstraints(maxWidth: MediaQuery.of(context).size.width * 0.78),
         child: Column(
           crossAxisAlignment: isMe ? CrossAxisAlignment.end : CrossAxisAlignment.start,
           children: [
-            GestureDetector(
-              onTap: () => _openMessageCanvas(msg),
-              child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                decoration: BoxDecoration(
-                  gradient: isMe
-                      ? const LinearGradient(colors: [Color(0xFF831843), Color(0xFF9D174D)])
-                      : const LinearGradient(colors: [Color(0xFF1E293B), Color(0xFF334155)]),
-                  borderRadius: BorderRadius.only(
-                    topRight: const Radius.circular(18),
-                    topLeft: const Radius.circular(18),
-                    bottomLeft: Radius.circular(isMe ? 18 : 4),
-                    bottomRight: Radius.circular(isMe ? 4 : 18),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+              decoration: BoxDecoration(
+                gradient: isMe
+                    ? const LinearGradient(colors: [Color(0xFF500724), Color(0xFF700A33)])
+                    : const LinearGradient(colors: [Color(0xFF1E1428), Color(0xFF281836)]),
+                borderRadius: BorderRadius.only(
+                  topRight: const Radius.circular(16),
+                  topLeft: const Radius.circular(16),
+                  bottomLeft: Radius.circular(isMe ? 16 : 4),
+                  bottomRight: Radius.circular(isMe ? 4 : 16),
+                ),
+                border: Border.all(
+                  color: isMe ? const Color(0xFFFB7185).withOpacity(0.25) : Colors.white12,
+                ),
+                boxShadow: const [
+                  BoxShadow(color: Colors.black26, blurRadius: 6, offset: Offset(0, 2)),
+                ],
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    msg.content,
+                    textDirection: TextDirection.rtl,
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 14,
+                      height: 1.4,
+                    ),
                   ),
-                  boxShadow: [
-                    BoxShadow(
-                      color: isMe ? const Color(0xFF831843).withOpacity(0.3) : Colors.black26,
-                      blurRadius: 8,
-                      offset: const Offset(0, 2),
-                    ),
-                  ],
-                ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    // Message Text
-                    Text(
-                      msg.content,
-                      textDirection: TextDirection.rtl,
-                      style: const TextStyle(
-                        color: Colors.white,
-                        fontSize: 14.5,
-                        height: 1.45,
+                  const SizedBox(height: 5),
+                  Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(
+                        PersianDateHelper.formatTime(msg.createdAt),
+                        style: TextStyle(color: Colors.white.withOpacity(0.5), fontSize: 10),
                       ),
-                    ),
-                    const SizedBox(height: 6),
-
-                    // Meta: Time, Seen Status & Canvas Hint
-                    Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Text(
-                          PersianDateHelper.formatTime(msg.createdAt),
-                          style: TextStyle(color: Colors.white.withOpacity(0.55), fontSize: 10),
-                        ),
-                        if (isMe) ...[
-                          const SizedBox(width: 4),
-                          _buildStatusIcon(msg),
-                        ],
+                      if (isMe) ...[
+                        const SizedBox(width: 4),
+                        _buildStatusIcon(msg),
                       ],
-                    ),
-                  ],
-                ),
+                    ],
+                  ),
+                ],
               ),
             ),
 
@@ -449,7 +692,6 @@ class _ChatScreenState extends State<ChatScreen> {
             ),
 
           // 2. Reaction Picker: STRICTLY ONLY RECIPIENT CAN REACT!
-          // Sender CANNOT react to own message as requested by user.
           if (!isMe) ...[
             const SizedBox(width: 6),
             ..._reactionEmojis.map((emoji) {

@@ -12,11 +12,20 @@ import 'features/time_capsule/time_capsule_service.dart';
 import 'features/notifications/unkillable_notification_service.dart';
 import 'features/pairing/pairing_manager.dart';
 import 'features/serverless/serverless_relay_adapter.dart';
+import 'features/profile/contact_manager.dart';
+import 'features/profile/pulse_navigation_drawer.dart';
+import 'features/profile/user_dashboard_dialog.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await UnkillableNotificationService.initialize();
-  await TimeCapsuleService.loadVault();
+  await ContactManager.initialize();
+  final activeContact = ContactManager.getActiveContact();
+  if (activeContact != null) {
+    await TimeCapsuleService.switchContact(activeContact.id);
+  } else {
+    await TimeCapsuleService.loadVault();
+  }
   runApp(const PulseApp());
 }
 
@@ -27,7 +36,7 @@ class PulseApp extends StatefulWidget {
   State<PulseApp> createState() => _PulseAppState();
 }
 
-class _PulseAppState extends State<PulseApp> {
+class _PulseAppState extends State<PulseApp> with WidgetsBindingObserver {
   bool _isLoading = true;
   bool _isFirstRun = true;
   bool _isSecretUnlocked = false;
@@ -40,9 +49,34 @@ class _PulseAppState extends State<PulseApp> {
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     _checkFirstRun();
     _initSensors();
     _initRelayListener();
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    PanicSensorService.stopListening();
+    ServerlessRelayAdapter.stopRelayListener();
+    super.dispose();
+  }
+
+  /// Instant Camouflage on Pause / Inactive / Background
+  /// "وقتی از برنامه لحظه ای خارج شد باز بره رو اضطرار"
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.paused ||
+        state == AppLifecycleState.inactive ||
+        state == AppLifecycleState.hidden) {
+      if (_isSecretUnlocked || _activeViewingMessage != null) {
+        setState(() {
+          _isSecretUnlocked = false;
+          _activeViewingMessage = null;
+        });
+      }
+    }
   }
 
   Future<void> _checkFirstRun() async {
@@ -77,13 +111,6 @@ class _PulseAppState extends State<PulseApp> {
         if (mounted) setState(() {});
       },
     );
-  }
-
-  @override
-  void dispose() {
-    PanicSensorService.stopListening();
-    ServerlessRelayAdapter.stopRelayListener();
-    super.dispose();
   }
 
   void _completeOnboarding() async {
@@ -158,67 +185,101 @@ class _PulseAppState extends State<PulseApp> {
 
     // 3. Unlocked Secret Space
     if (_isSecretUnlocked) {
+      final activeContact = ContactManager.getActiveContact();
+
       return Scaffold(
         backgroundColor: const Color(0xFF0E0715),
-        appBar: AppBar(
-          backgroundColor: const Color(0xFF1B0B27),
-          elevation: 0,
-          title: Text(
-            _selectedVaultTab == 0 ? 'چت و تاریخچه شمسی' : 'ارسال پیام جدید و جملات آماده',
-            style: const TextStyle(fontSize: 15, fontWeight: FontWeight.bold),
-          ),
-          actions: [
-            // Instant camouflage switch button
-            IconButton(
-              icon: const Icon(Icons.shield_outlined, color: Color(0xFF10B981)),
-              tooltip: 'تغییر قیافه فوری به مانیتور ضربان',
-              onPressed: () {
-                setState(() => _isSecretUnlocked = false);
-              },
-            ),
-          ],
-        ),
         body: _selectedVaultTab == 0
             ? ChatScreen(
                 onEmergencyPanic: () => setState(() => _isSecretUnlocked = false),
+                onContactSwitched: () => setState(() {}),
               )
-            : MessageComposerScreen(
-                onSendMessage: ({
-                  required String content,
-                  required String category,
-                  required String themeId,
-                  required String customBgColor,
-                  required String particleType,
-                  DateTime? scheduledTime,
-                }) async {
-                  final myCode = await PairingManager.getOrCreateMyCode();
-                  final capsule = PulseMessageModel(
-                    id: DateTime.now().millisecondsSinceEpoch.toString(),
-                    content: content,
-                    category: category,
-                    themeId: themeId,
-                    customBgColor: customBgColor,
-                    particleType: particleType,
-                    scheduledUnlockTime: scheduledTime ?? DateTime.now(),
-                    status: 'sent',
-                    senderCode: myCode,
-                    isSender: true,
-                    createdAt: DateTime.now(),
-                  );
+            : Scaffold(
+                backgroundColor: const Color(0xFF0E0715),
+                drawer: PulseNavigationDrawer(
+                  onEmergencyPanic: () => setState(() => _isSecretUnlocked = false),
+                  onContactSwitched: () => setState(() {}),
+                ),
+                appBar: AppBar(
+                  backgroundColor: const Color(0xFF1B0B27),
+                  elevation: 0,
+                  leading: Builder(
+                    builder: (ctx) => IconButton(
+                      icon: const Icon(Icons.menu_rounded, color: Colors.white, size: 24),
+                      tooltip: 'منوی کاربری و مخاطبان (مانند اسنپ)',
+                      onPressed: () => Scaffold.of(ctx).openDrawer(),
+                    ),
+                  ),
+                  title: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'ارسال بوم: ${activeContact?.name ?? "پارتنر"}',
+                        style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold),
+                      ),
+                      Text(
+                        'کد متصل: ${activeContact?.partnerCode.isEmpty ?? true ? "تنظیم نشده" : activeContact!.partnerCode}',
+                        style: TextStyle(fontSize: 10, color: const Color(0xFFFB7185).withOpacity(0.9)),
+                      ),
+                    ],
+                  ),
+                  actions: [
+                    IconButton(
+                      icon: const Icon(Icons.dashboard_outlined, color: Color(0xFFFB7185)),
+                      tooltip: 'داشبورد کدهای جفت‌سازی',
+                      onPressed: () => UserDashboardDialog.show(context, onDataChanged: () => setState(() {})),
+                    ),
+                    IconButton(
+                      icon: const Icon(Icons.shield_outlined, color: Color(0xFF10B981)),
+                      tooltip: 'تغییر قیافه فوری به مانیتور ضربان',
+                      onPressed: () => setState(() => _isSecretUnlocked = false),
+                    ),
+                  ],
+                ),
+                body: MessageComposerScreen(
+                  onSendMessage: ({
+                    required String content,
+                    required String category,
+                    required String themeId,
+                    required String customBgColor,
+                    required String particleType,
+                    DateTime? scheduledTime,
+                  }) async {
+                    final myCode = await PairingManager.getOrCreateMyCode();
+                    final currentPartner = ContactManager.getActiveContact();
 
-                  // 1. Save to local vault
-                  await TimeCapsuleService.saveToVault(capsule);
+                    final capsule = PulseMessageModel(
+                      id: DateTime.now().millisecondsSinceEpoch.toString(),
+                      content: content,
+                      category: category,
+                      themeId: themeId,
+                      customBgColor: customBgColor,
+                      particleType: particleType,
+                      scheduledUnlockTime: scheduledTime ?? DateTime.now(),
+                      status: 'sent',
+                      senderCode: myCode,
+                      isSender: true,
+                      createdAt: DateTime.now(),
+                      isCanvas: true, // Marked as Romantic Canvas Card
+                    );
 
-                  // 2. Real cloud dispatch to partner via ntfy relay!
-                  await ServerlessRelayAdapter.sendMessage(message: capsule);
+                    // 1. Save to local vault
+                    await TimeCapsuleService.saveToVault(capsule);
 
-                  // 3. Open dynamic canvas preview
-                  setState(() {
-                    _activeViewingMessage = content;
-                    _activeViewingCustomBg = customBgColor;
-                    _activeViewingParticle = particleType;
-                  });
-                },
+                    // 2. Real cloud dispatch to partner via ntfy relay!
+                    await ServerlessRelayAdapter.sendMessage(
+                      message: capsule,
+                      targetPartnerCode: currentPartner?.partnerCode,
+                    );
+
+                    // 3. Open dynamic canvas preview
+                    setState(() {
+                      _activeViewingMessage = content;
+                      _activeViewingCustomBg = customBgColor;
+                      _activeViewingParticle = particleType;
+                    });
+                  },
+                ),
               ),
         bottomNavigationBar: BottomNavigationBar(
           backgroundColor: const Color(0xFF180A22),
@@ -235,7 +296,7 @@ class _PulseAppState extends State<PulseApp> {
             BottomNavigationBarItem(
               icon: Icon(Icons.edit_note_outlined),
               activeIcon: Icon(Icons.edit_note),
-              label: 'ارسال پیام جدید',
+              label: 'ارسال بوم عاشقانه',
             ),
           ],
         ),

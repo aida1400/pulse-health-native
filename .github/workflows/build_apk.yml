@@ -93,9 +93,9 @@ jobs:
       - name: Publish GitHub Release
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: v1.1.0
-          name: Pulse Health Native v1.1.0
-          body: "Official 100% Native Android Build for Pulse Health v1.1.0. New: Active Cloud Relay, Real-time Live Chat, Persian Jalali Timeline & Calendar Jump, 160 Sentences across 8 Categories, Custom Dynamic Canvas with Candle Drips and Erupting Hearts, Context-Aware Disguised Notifications, Sticky Fixed Send Button, Delivery & Seen Receipts."
+          tag_name: v1.2.0
+          name: Pulse Health Native v1.2.0
+          body: "Official 100% Native Android Build for Pulse Health v1.2.0. New: Multi-Contact Romantic & Family Spaces (Snapp-style Addresses), User Profile Drawer with Name & Phone, Pairing Code Dashboard with Copy/Share, Instant Auto-Lock Camouflage on App Pause/Exit, Distinct Romantic Canvas Cards in Chat History, Isolated Vaults per Contact."
           files: build/app/outputs/flutter-apk/Pulse_Health_Native.apk
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

@@ -9,7 +9,7 @@ class PulseMessageModel {
   String category;
   String themeId;
   String customBgColor;
-  String particleType; // 'heart', 'candle', 'rose', 'star', 'fire'
+  String particleType; // 'heart', 'candle', 'rose', 'star', 'fire', 'none'
   DateTime scheduledUnlockTime;
   String status; // 'sent', 'delivered', 'seen', 'recalled'
   final String senderCode;
@@ -17,6 +17,7 @@ class PulseMessageModel {
   final DateTime createdAt;
   DateTime? seenAt;
   List<String> reactions;
+  bool isCanvas; // Distinctly marks Canvas Cards vs Plain Chat Bubbles
 
   PulseMessageModel({
     required this.id,
@@ -32,7 +33,9 @@ class PulseMessageModel {
     required this.createdAt,
     this.seenAt,
     List<String>? reactions,
-  }) : reactions = reactions ?? [];
+    bool? isCanvas,
+  })  : reactions = reactions ?? [],
+        isCanvas = isCanvas ?? (particleType != 'none' && themeId != 'chat_text');
 
   bool get isLocked => DateTime.now().isBefore(scheduledUnlockTime) && status != 'recalled';
   bool get canBeEditedOrRecalled => isSender && status == 'sent';
@@ -51,6 +54,7 @@ class PulseMessageModel {
     'createdAt': createdAt.toIso8601String(),
     'seenAt': seenAt?.toIso8601String(),
     'reactions': reactions,
+    'isCanvas': isCanvas,
   };
 
   factory PulseMessageModel.fromJson(Map<String, dynamic> json, {bool? overrideIsSender}) => PulseMessageModel(
@@ -67,19 +71,36 @@ class PulseMessageModel {
     createdAt: DateTime.parse(json['createdAt'] ?? DateTime.now().toIso8601String()),
     seenAt: json['seenAt'] != null ? DateTime.parse(json['seenAt']) : null,
     reactions: (json['reactions'] as List<dynamic>?)?.map((e) => e.toString()).toList() ?? [],
+    isCanvas: json['isCanvas'] ?? (json['themeId'] != 'chat_text' && (json['particleType'] ?? 'heart') != 'none'),
   );
 }
 
 class TimeCapsuleService {
   static final List<PulseMessageModel> _vault = [];
+  static String _activeContactId = 'contact_default';
+
+  static String get activeContactId => _activeContactId;
+
+  static String _getVaultKey(String contactId) => 'pulse_messages_vault_v2_$contactId';
+
+  static Future<void> switchContact(String contactId) async {
+    _activeContactId = contactId;
+    await loadVault();
+  }
 
   static Future<void> loadVault() async {
     try {
       final prefs = await SharedPreferences.getInstance();
-      final raw = prefs.getString(AppConstants.keyStoredMessages);
+      String? raw = prefs.getString(_getVaultKey(_activeContactId));
+
+      // Fallback/migration for the default partner if new key doesn't exist yet
+      if ((raw == null || raw.isEmpty) && _activeContactId == 'contact_default') {
+        raw = prefs.getString(AppConstants.keyStoredMessages);
+      }
+
+      _vault.clear();
       if (raw != null && raw.isNotEmpty) {
         final List<dynamic> list = jsonDecode(raw);
-        _vault.clear();
         for (var item in list) {
           _vault.add(PulseMessageModel.fromJson(item));
         }
@@ -95,6 +116,34 @@ class TimeCapsuleService {
       _vault.add(message);
     }
     await _persist();
+  }
+
+  /// Saves a message directly into a specific contact's vault (even if not currently active on screen)
+  static Future<void> saveToContactVault(String contactId, PulseMessageModel message) async {
+    if (contactId == _activeContactId) {
+      await saveToVault(message);
+      return;
+    }
+
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final key = _getVaultKey(contactId);
+      final raw = prefs.getString(key);
+      List<PulseMessageModel> targetList = [];
+      if (raw != null && raw.isNotEmpty) {
+        final List<dynamic> list = jsonDecode(raw);
+        targetList = list.map((e) => PulseMessageModel.fromJson(e)).toList();
+      }
+
+      final idx = targetList.indexWhere((e) => e.id == message.id);
+      if (idx >= 0) {
+        targetList[idx] = message;
+      } else {
+        targetList.add(message);
+      }
+
+      await prefs.setString(key, jsonEncode(targetList.map((e) => e.toJson()).toList()));
+    } catch (_) {}
   }
 
   static Future<void> updateMessageStatus(String id, String newStatus, {DateTime? seenAt}) async {
@@ -177,7 +226,10 @@ class TimeCapsuleService {
     try {
       final prefs = await SharedPreferences.getInstance();
       final data = jsonEncode(_vault.map((e) => e.toJson()).toList());
-      await prefs.setString(AppConstants.keyStoredMessages, data);
+      await prefs.setString(_getVaultKey(_activeContactId), data);
+      if (_activeContactId == 'contact_default') {
+        await prefs.setString(AppConstants.keyStoredMessages, data);
+      }
     } catch (_) {}
   }
 }
