@@ -10,7 +10,6 @@ class ContactManager {
   static List<ContactModel> _contacts = [];
   static ContactModel? _activeContact;
 
-  /// Initializes contacts, ensuring default partner profile exists
   static Future<void> initialize() async {
     final prefs = await SharedPreferences.getInstance();
     final raw = prefs.getString(_keyContactsList);
@@ -24,7 +23,6 @@ class ContactManager {
       }
     }
 
-    // If empty, create initial default contact from current pairing manager
     if (_contacts.isEmpty) {
       final existingPartnerCode = await PairingManager.getPartnerCode() ?? '';
       final defaultContact = ContactModel(
@@ -32,14 +30,14 @@ class ContactManager {
         name: 'همسر / پارتنر',
         relation: 'همسر',
         partnerCode: existingPartnerCode,
-        colorHex: '#FB7185',
+        colorHex: '#E11D48',
+        avatarEmoji: '❤️',
         isActive: true,
       );
       _contacts.add(defaultContact);
       await _persistContacts();
     }
 
-    // Set active contact
     _activeContact = _contacts.firstWhere(
       (e) => e.isActive,
       orElse: () {
@@ -48,7 +46,6 @@ class ContactManager {
       },
     );
 
-    // Sync active partner code with PairingManager
     if (_activeContact != null && _activeContact!.partnerCode.isNotEmpty) {
       await PairingManager.pairWithPartner(_activeContact!.partnerCode);
     }
@@ -83,9 +80,8 @@ class ContactManager {
     required String name,
     required String relation,
     required String partnerCode,
-    String colorHex = '#FB7185',
-    String? avatarBase64,
-    int avatarPreset = 0,
+    String colorHex = '#E11D48',
+    String avatarEmoji = '❤️',
   }) async {
     final newContact = ContactModel(
       id: 'contact_${DateTime.now().millisecondsSinceEpoch}',
@@ -93,9 +89,8 @@ class ContactManager {
       relation: relation.trim(),
       partnerCode: partnerCode.trim().toUpperCase(),
       colorHex: colorHex,
+      avatarEmoji: avatarEmoji,
       isActive: false,
-      avatarBase64: avatarBase64,
-      avatarPreset: avatarPreset,
     );
 
     _contacts.add(newContact);
@@ -109,8 +104,7 @@ class ContactManager {
     String? relation,
     String? partnerCode,
     String? colorHex,
-    String? avatarBase64,
-    int? avatarPreset,
+    String? avatarEmoji,
   }) async {
     final idx = _contacts.indexWhere((e) => e.id == id);
     if (idx >= 0) {
@@ -118,8 +112,7 @@ class ContactManager {
       if (relation != null) _contacts[idx].relation = relation.trim();
       if (partnerCode != null) _contacts[idx].partnerCode = partnerCode.trim().toUpperCase();
       if (colorHex != null) _contacts[idx].colorHex = colorHex;
-      if (avatarBase64 != null) _contacts[idx].avatarBase64 = avatarBase64;
-      if (avatarPreset != null) _contacts[idx].avatarPreset = avatarPreset;
+      if (avatarEmoji != null) _contacts[idx].avatarEmoji = avatarEmoji;
 
       if (_contacts[idx].isActive) {
         _activeContact = _contacts[idx];
@@ -133,7 +126,6 @@ class ContactManager {
 
   static Future<bool> deleteContact(String id) async {
     if (_contacts.length <= 1) {
-      // Cannot delete the only remaining contact
       return false;
     }
 
@@ -163,7 +155,6 @@ class ContactManager {
     }
   }
 
-  /// User Profile management
   static Future<UserProfileModel> getUserProfile() async {
     final prefs = await SharedPreferences.getInstance();
     final myCode = await PairingManager.getOrCreateMyCode();
@@ -180,17 +171,17 @@ class ContactManager {
       name: 'آیدا شفیع‌خانی',
       phone: '۰۹۱۲۳۴۵۶۷۸۹',
       myCode: myCode,
+      avatarEmoji: '👑',
     );
   }
 
-  static Future<void> updateUserProfile({String? name, String? phone, String? avatarBase64, int? avatarPreset}) async {
+  static Future<void> updateUserProfile({String? name, String? phone, String? avatarEmoji}) async {
     final prefs = await SharedPreferences.getInstance();
     final current = await getUserProfile();
 
     if (name != null) current.name = name.trim();
     if (phone != null) current.phone = phone.trim();
-    if (avatarBase64 != null) current.avatarBase64 = avatarBase64;
-    if (avatarPreset != null) current.avatarPreset = avatarPreset;
+    if (avatarEmoji != null) current.avatarEmoji = avatarEmoji;
 
     await prefs.setString(_keyUserProfile, jsonEncode(current.toJson()));
   }

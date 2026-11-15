@@ -39,11 +39,11 @@ class _MessageComposerScreenState extends State<MessageComposerScreen> {
   };
 
   final List<Map<String, dynamic>> _colorPresets = [
-    {'name': 'زرشکی سلطنتی', 'color': const Color(0xFF2D0B1E), 'hex': '#2D0B1E'},
-    {'name': 'صورتی رمانتیک', 'color': const Color(0xFF3B1425), 'hex': '#3B1425'},
-    {'name': 'مشکی مخملی', 'color': const Color(0xFF0F0B18), 'hex': '#0F0B18'},
-    {'name': 'بنفش نئونی', 'color': const Color(0xFF1E0B36), 'hex': '#1E0B36'},
-    {'name': 'یاقوتی آتشین', 'color': const Color(0xFF5C071D), 'hex': '#5C071D'},
+    {'name': 'زرشکی سلطنتی', 'color': const Color(0xFF2D0817), 'hex': '#2D0817'},
+    {'name': 'صورتی رمانتیک', 'color': const Color(0xFF3B0C20), 'hex': '#3B0C20'},
+    {'name': 'مشکی مخملی', 'color': const Color(0xFF0F0408), 'hex': '#0F0408'},
+    {'name': 'شرابی آتشین', 'color': const Color(0xFF4C0519), 'hex': '#4C0519'},
+    {'name': 'یاقوتی درخشان', 'color': const Color(0xFF5C081F), 'hex': '#5C081F'},
     {'name': 'زمردی تیره', 'color': const Color(0xFF0B241C), 'hex': '#0B241C'},
     {'name': 'طلایی کهربایی', 'color': const Color(0xFF2D1E0B), 'hex': '#2D1E0B'},
   ];
@@ -163,9 +163,9 @@ class _MessageComposerScreenState extends State<MessageComposerScreen> {
   Widget _buildInputBox() {
     return Container(
       decoration: BoxDecoration(
-        color: const Color(0xFF12030A),
+        color: const Color(0xFF19030B),
         borderRadius: BorderRadius.circular(18),
-        border: Border.all(color: const Color(0xFFE11D48).withOpacity(0.3)),
+        border: Border.all(color: const Color(0xFFE11D48).withOpacity(0.4)),
       ),
       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
       child: Column(
@@ -217,9 +217,9 @@ class _MessageComposerScreenState extends State<MessageComposerScreen> {
     return Container(
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
-        color: const Color(0xFF1A0510),
+        color: const Color(0xFF220512),
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: Colors.white.withOpacity(0.08)),
+        border: Border.all(color: const Color(0xFFE11D48).withOpacity(0.2)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -331,9 +331,9 @@ class _MessageComposerScreenState extends State<MessageComposerScreen> {
     return Container(
       margin: const EdgeInsets.only(bottom: 8),
       decoration: BoxDecoration(
-        color: const Color(0xFF18040E),
+        color: const Color(0xFF1E0510),
         borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: Colors.white.withOpacity(0.06)),
+        border: Border.all(color: const Color(0xFFE11D48).withOpacity(0.25)),
       ),
       child: Theme(
         data: Theme.of(context).copyWith(dividerColor: Colors.transparent),
@@ -364,7 +364,7 @@ class _MessageComposerScreenState extends State<MessageComposerScreen> {
                   SnackBar(
                     content: const Text('متن در کادر درج شد؛ دکمه ارسال در پایین صفحه آماده است.', textDirection: TextDirection.rtl),
                     duration: const Duration(milliseconds: 1200),
-                    backgroundColor: const Color(0xFF4C1D95),
+                    backgroundColor: const Color(0xFFE11D48),
                   ),
                 );
               },
@@ -379,8 +379,8 @@ class _MessageComposerScreenState extends State<MessageComposerScreen> {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 12.0),
       decoration: BoxDecoration(
-        color: const Color(0xFF1E0612),
-        border: Border(top: BorderSide(color: const Color(0xFFE11D48).withOpacity(0.3), width: 1)),
+        color: const Color(0xFF220512),
+        border: const Border(top: BorderSide(color: Color(0xFFE11D48), width: 1.5)),
         boxShadow: [
           BoxShadow(
             color: Colors.black.withOpacity(0.6),

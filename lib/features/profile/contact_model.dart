@@ -1,27 +1,24 @@
 import 'dart:convert';
 
-/// Represents a private contact / space (similar to saved addresses in Snapp)
 class ContactModel {
   final String id;
-  String name; // e.g. "همسر", "مامان", "خواهر", "پارتنر"
+  String name;
   String relation; // "همسر", "مادر", "خواهر", "پارتنر", "دوست", "سایر"
-  String partnerCode; // 6-character unique pairing code
-  String colorHex; // Tag color
+  String partnerCode;
+  String colorHex;
+  String avatarEmoji; // Profile picture emoji / badge
   bool isActive;
   final DateTime createdAt;
-  String? avatarBase64;
-  int avatarPreset; // 0 to 5
 
   ContactModel({
     required this.id,
     required this.name,
     required this.relation,
     required this.partnerCode,
-    this.colorHex = '#FB7185',
+    this.colorHex = '#E11D48',
+    this.avatarEmoji = '❤️',
     this.isActive = false,
     DateTime? createdAt,
-    this.avatarBase64,
-    this.avatarPreset = 0,
   }) : createdAt = createdAt ?? DateTime.now();
 
   Map<String, dynamic> toJson() => {
@@ -30,10 +27,9 @@ class ContactModel {
     'relation': relation,
     'partnerCode': partnerCode,
     'colorHex': colorHex,
+    'avatarEmoji': avatarEmoji,
     'isActive': isActive,
     'createdAt': createdAt.toIso8601String(),
-    'avatarBase64': avatarBase64,
-    'avatarPreset': avatarPreset,
   };
 
   factory ContactModel.fromJson(Map<String, dynamic> json) => ContactModel(
@@ -41,43 +37,37 @@ class ContactModel {
     name: json['name'] ?? 'مخاطب',
     relation: json['relation'] ?? 'همسر',
     partnerCode: json['partnerCode'] ?? '',
-    colorHex: json['colorHex'] ?? '#FB7185',
+    colorHex: json['colorHex'] ?? '#E11D48',
+    avatarEmoji: json['avatarEmoji'] ?? '❤️',
     isActive: json['isActive'] ?? false,
     createdAt: json['createdAt'] != null ? DateTime.parse(json['createdAt']) : DateTime.now(),
-    avatarBase64: json['avatarBase64'],
-    avatarPreset: json['avatarPreset'] ?? 0,
   );
 }
 
-/// Represents the owner user profile
 class UserProfileModel {
   String name;
   String phone;
   final String myCode;
-  String? avatarBase64;
-  int avatarPreset; // 0 to 5
+  String avatarEmoji; // Profile picture emoji / badge (e.g. 👑, 🌹, 💖, 🧕, 💍, 🦋)
 
   UserProfileModel({
     required this.name,
     required this.phone,
     required this.myCode,
-    this.avatarBase64,
-    this.avatarPreset = 0,
+    this.avatarEmoji = '👑',
   });
 
   Map<String, dynamic> toJson() => {
     'name': name,
     'phone': phone,
     'myCode': myCode,
-    'avatarBase64': avatarBase64,
-    'avatarPreset': avatarPreset,
+    'avatarEmoji': avatarEmoji,
   };
 
   factory UserProfileModel.fromJson(Map<String, dynamic> json, String defaultCode) => UserProfileModel(
     name: json['name'] ?? 'آیدا شفیع‌خانی',
     phone: json['phone'] ?? '۰۹۱۲۳۴۵۶۷۸۹',
     myCode: json['myCode'] ?? defaultCode,
-    avatarBase64: json['avatarBase64'],
-    avatarPreset: json['avatarPreset'] ?? 0,
+    avatarEmoji: json['avatarEmoji'] ?? '👑',
   );
 }

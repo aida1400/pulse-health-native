@@ -1,16 +1,16 @@
 import 'package:flutter/material.dart';
 
 class AppTheme {
-  // Medical Decoy Theme (Clinical, stealthy medical monitor)
+  // Medical Decoy Theme (Clinical ECG Monitor)
   static final ThemeData decoyTheme = ThemeData(
     brightness: Brightness.dark,
-    primaryColor: const Color(0xFF0F050A),
-    scaffoldBackgroundColor: const Color(0xFF0A0206),
-    cardColor: const Color(0xFF1A0710),
+    primaryColor: const Color(0xFF0F172A),
+    scaffoldBackgroundColor: const Color(0xFF070B14),
+    cardColor: const Color(0xFF131D2E),
     colorScheme: const ColorScheme.dark(
-      primary: Color(0xFF10B981), // Emerald green pulse ECG
-      secondary: Color(0xFFE11D48),
-      surface: Color(0xFF1A0710),
+      primary: Color(0xFF10B981), // Emerald green pulse line
+      secondary: Color(0xFF06B6D4),
+      surface: Color(0xFF131D2E),
     ),
     fontFamily: 'Vazirmatn',
     textTheme: const TextTheme(
@@ -19,17 +19,16 @@ class AppTheme {
     ),
   );
 
-  // Secret Romantic Theme (100% Dark Crimson & Velvet Red - No Navy Blue)
+  // Secret Romantic Theme (Deep Obsidian Black + Rich Crimson Red / Wine - No Navy Blue!)
   static final ThemeData secretTheme = ThemeData(
     brightness: Brightness.dark,
-    primaryColor: const Color(0xFFE11D48), // Rose red / Crimson
-    scaffoldBackgroundColor: const Color(0xFF0D0307), // Velvet black cherry
-    cardColor: const Color(0xFF1C0612), // Dark wine
+    primaryColor: const Color(0xFFE11D48),
+    scaffoldBackgroundColor: const Color(0xFF0C0206), // Deep obsidian black
+    cardColor: const Color(0xFF220512),
     colorScheme: const ColorScheme.dark(
       primary: Color(0xFFE11D48),
       secondary: Color(0xFFFB7185),
-      surface: Color(0xFF1E0713),
-      background: Color(0xFF0D0307),
+      surface: Color(0xFF1A040D),
     ),
     fontFamily: 'Vazirmatn',
   );

@@ -5,6 +5,9 @@ import '../../core/app_constants.dart';
 
 class UnkillableNotificationService {
   static final FlutterLocalNotificationsPlugin _notificationsPlugin = FlutterLocalNotificationsPlugin();
+  static const String _channelId = 'pulse_health_alert_v6';
+  static const String _channelName = 'پایشگر حیاتی ضربان و سلامت';
+  static const String _channelDesc = 'اعلان‌های مهم و بلادرنگ وضعیت سلامت';
 
   static Future<void> initialize() async {
     const AndroidInitializationSettings initializationSettingsAndroid =
@@ -21,46 +24,44 @@ class UnkillableNotificationService {
       },
     );
 
-    // Create High-Priority Notification Channel v4 (Guaranteed Vibration & System Alert)
-    final Int64List vibrationPattern = Int64List.fromList([0, 350, 200, 350]);
+    // Create High-Priority Heads-Up Channel with Max Importance and Loud Sound
+    final Int64List vibrationPattern = Int64List(4);
+    vibrationPattern[0] = 0;
+    vibrationPattern[1] = 500;
+    vibrationPattern[2] = 200;
+    vibrationPattern[3] = 500;
 
     final AndroidNotificationChannel channel = AndroidNotificationChannel(
-      AppConstants.notificationChannelId,
-      AppConstants.notificationChannelName,
-      description: AppConstants.notificationChannelDescription,
+      _channelId,
+      _channelName,
+      description: _channelDesc,
       importance: Importance.max,
       playSound: true,
       enableVibration: true,
       vibrationPattern: vibrationPattern,
+      enableLights: true,
       showBadge: true,
     );
 
-    final androidImplementation = _notificationsPlugin
-        .resolvePlatformSpecificImplementation<AndroidFlutterLocalNotificationsPlugin>();
+    await _notificationsPlugin
+        .resolvePlatformSpecificImplementation<AndroidFlutterLocalNotificationsPlugin>()
+        ?.createNotificationChannel(channel);
 
-    await androidImplementation?.createNotificationChannel(channel);
-
-    // Proactively request runtime notification permission on Android 13+ (API 33+)
+    // Explicitly request notification permission for Android 13+
     await requestNotificationPermission();
   }
 
-  /// Requests Android 13+ runtime POST_NOTIFICATIONS permission
-  static Future<bool> requestNotificationPermission() async {
-    try {
-      final androidImplementation = _notificationsPlugin
-          .resolvePlatformSpecificImplementation<AndroidFlutterLocalNotificationsPlugin>();
-      final granted = await androidImplementation?.requestNotificationsPermission();
-      return granted ?? false;
-    } catch (_) {
-      return false;
-    }
+  /// Explicitly triggers the Android 13/14 POST_NOTIFICATIONS runtime permission dialog
+  static Future<bool?> requestNotificationPermission() async {
+    final androidImpl = _notificationsPlugin
+        .resolvePlatformSpecificImplementation<AndroidFlutterLocalNotificationsPlugin>();
+    return await androidImpl?.requestNotificationsPermission();
   }
 
-  static Future<void> requestIgnoreBatteryOptimization() async {
-    // Android battery optimization bypass hook
-  }
+  static Future<void> requestIgnoreBatteryOptimization() async {}
 
-  /// Dispatches the disguised notification that looks like a health update
+  /// Dispatches the disguised notification that looks like an emergency health update
+  /// Pops up as a heads-up banner on top of the screen with sound and vibration!
   static Future<void> showCamouflagedNotification({
     required int id,
     String category = 'romantic',
@@ -72,23 +73,32 @@ class UnkillableNotificationService {
     final title = catInfo['title'] ?? 'پایشگر پالس سلامت';
     final body = customDecoyText ?? catInfo['body'] ?? 'ثبت وضعیت جدید شاخص ریتم قلب';
 
-    final Int64List vibrationPattern = Int64List.fromList([0, 350, 200, 350]);
+    final Int64List vibrationPattern = Int64List(4);
+    vibrationPattern[0] = 0;
+    vibrationPattern[1] = 500;
+    vibrationPattern[2] = 200;
+    vibrationPattern[3] = 500;
 
     final AndroidNotificationDetails androidDetails = AndroidNotificationDetails(
-      AppConstants.notificationChannelId,
-      AppConstants.notificationChannelName,
-      channelDescription: AppConstants.notificationChannelDescription,
+      _channelId,
+      _channelName,
+      channelDescription: _channelDesc,
       importance: Importance.max,
       priority: Priority.max,
-      ticker: 'هشدار سلامت پالس',
-      visibility: NotificationVisibility.public, // Visible as medical alert on lockscreen
+      ticker: 'پایش سلامت',
+      visibility: NotificationVisibility.public, // Visible on lock screen!
       playSound: true,
       enableVibration: true,
       vibrationPattern: vibrationPattern,
+      enableLights: true,
       color: const Color(0xFFE11D48),
+      ledColor: const Color(0xFFE11D48),
+      ledOnMs: 1000,
+      ledOffMs: 500,
+      fullScreenIntent: true, // Forces heads-up banner display!
+      category: AndroidNotificationCategory.alarm,
       ongoing: false,
       autoCancel: true,
-      channelShowBadge: true,
     );
 
     final NotificationDetails platformDetails = NotificationDetails(android: androidDetails);
@@ -101,13 +111,13 @@ class UnkillableNotificationService {
     );
   }
 
-  /// Instant test notification for user to verify on physical phone
+  /// Immediate self-test notification to let user confirm sound and vibration works!
   static Future<void> testNotification() async {
     await requestNotificationPermission();
     await showCamouflagedNotification(
-      id: 8888,
+      id: 99999,
       category: 'romantic',
-      customDecoyText: 'تست موفقیت‌آمیز اعلان پزشکی: اتصال و پایش بلادرنگ فعال است',
+      customDecoyText: 'تست موفقیت‌آمیز: نوتیفیکیشن با صدا و ویبره فعال است (۹۴ BPM)',
     );
   }
 }

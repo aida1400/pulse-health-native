@@ -27,15 +27,16 @@ class _ChatScreenState extends State<ChatScreen> {
   final GlobalKey<ScaffoldState> _scaffoldKey = GlobalKey<ScaffoldState>();
   final ScrollController _scrollController = ScrollController();
   final TextEditingController _msgInputController = TextEditingController();
-  final FocusNode _inputFocusNode = FocusNode();
   final Map<String, GlobalKey> _dateHeaderKeys = {};
 
   List<PulseMessageModel> _messages = [];
   Map<String, List<PulseMessageModel>> _groupedMessages = {};
   Timer? _liveRefreshTimer;
+  Timer? _typingDebounce;
 
-  // Reply state
   PulseMessageModel? _replyingToMessage;
+  bool _isPartnerOnline = false;
+  bool _isPartnerTyping = false;
 
   final List<String> _reactionEmojis = ['❤️', '🥺', '💋', '🫂', '😭', '✨'];
 
@@ -44,20 +45,51 @@ class _ChatScreenState extends State<ChatScreen> {
     super.initState();
     _loadMessages();
     _markIncomingMessagesAsSeen();
+
     _liveRefreshTimer = Timer.periodic(const Duration(seconds: 2), (t) {
       if (mounted) {
         _loadMessages();
         _markIncomingMessagesAsSeen();
+        _checkPartnerPresence();
       }
     });
+
+    _msgInputController.addListener(_onInputChanged);
+  }
+
+  void _onInputChanged() {
+    final hasText = _msgInputController.text.trim().isNotEmpty;
+    _typingDebounce?.cancel();
+
+    if (hasText) {
+      ServerlessRelayAdapter.sendTyping(isTyping: true);
+      _typingDebounce = Timer(const Duration(seconds: 3), () {
+        ServerlessRelayAdapter.sendTyping(isTyping: false);
+      });
+    } else {
+      ServerlessRelayAdapter.sendTyping(isTyping: false);
+    }
+  }
+
+  void _checkPartnerPresence() {
+    final lastTime = ServerlessRelayAdapter.lastPartnerActiveTime;
+    final isOnline = lastTime != null && DateTime.now().difference(lastTime) < const Duration(seconds: 45);
+    final isTyping = ServerlessRelayAdapter.isPartnerTyping;
+
+    if (isOnline != _isPartnerOnline || isTyping != _isPartnerTyping) {
+      setState(() {
+        _isPartnerOnline = isOnline;
+        _isPartnerTyping = isTyping;
+      });
+    }
   }
 
   @override
   void dispose() {
     _liveRefreshTimer?.cancel();
+    _typingDebounce?.cancel();
     _scrollController.dispose();
     _msgInputController.dispose();
-    _inputFocusNode.dispose();
     super.dispose();
   }
 
@@ -89,7 +121,6 @@ class _ChatScreenState extends State<ChatScreen> {
     }
   }
 
-  /// Automatically marks all received partner messages as 'seen' and dispatches seen receipt
   Future<void> _markIncomingMessagesAsSeen() async {
     for (var msg in _messages) {
       if (!msg.isSender && msg.status != 'seen') {
@@ -113,19 +144,17 @@ class _ChatScreenState extends State<ChatScreen> {
       content: text,
       category: 'چت کوتاه',
       themeId: 'chat_text',
-      customBgColor: '#1A0510',
+      customBgColor: '#1A040D',
       particleType: 'none',
       scheduledUnlockTime: DateTime.now(),
       status: 'sent',
       senderCode: myCode,
       isSender: true,
       createdAt: DateTime.now(),
-      isCanvas: false, // Standard Chat Bubble
+      isCanvas: false,
       replyToId: _replyingToMessage?.id,
       replyToContent: _replyingToMessage?.content,
-      replyToSender: _replyingToMessage != null
-          ? (_replyingToMessage!.isSender ? 'شما' : (activeContact?.name ?? 'پارتنر'))
-          : null,
+      replyToSender: _replyingToMessage != null ? (_replyingToMessage!.isSender ? 'شما' : activeContact?.name ?? 'پارتنر') : null,
     );
 
     await TimeCapsuleService.saveToVault(newMsg);
@@ -138,20 +167,8 @@ class _ChatScreenState extends State<ChatScreen> {
     setState(() {
       _replyingToMessage = null;
     });
+    ServerlessRelayAdapter.sendTyping(isTyping: false);
     _loadMessages(forceScroll: true);
-  }
-
-  void _initiateReply(PulseMessageModel msg) {
-    setState(() {
-      _replyingToMessage = msg;
-    });
-    _inputFocusNode.requestFocus();
-  }
-
-  void _cancelReply() {
-    setState(() {
-      _replyingToMessage = null;
-    });
   }
 
   void _openCalendarPicker() {
@@ -159,9 +176,10 @@ class _ChatScreenState extends State<ChatScreen> {
 
     showModalBottomSheet(
       context: context,
-      backgroundColor: const Color(0xFF1A0510),
+      backgroundColor: const Color(0xFF1C040E),
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+        side: BorderSide(color: Color(0xFFE11D48)),
       ),
       builder: (context) {
         return Container(
@@ -174,7 +192,7 @@ class _ChatScreenState extends State<ChatScreen> {
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
                   const Text(
-                    'انتخاب و پرش به تاریخ شمسی:',
+                    'پرش به تاریخ خورشیدی:',
                     style: TextStyle(color: Colors.white, fontSize: 15, fontWeight: FontWeight.bold),
                   ),
                   IconButton(
@@ -201,8 +219,8 @@ class _ChatScreenState extends State<ChatScreen> {
                   children: distinctDates.map((dateLabel) {
                     final count = _groupedMessages[dateLabel]?.length ?? 0;
                     return ActionChip(
-                      backgroundColor: const Color(0xFF2E0919),
-                      side: BorderSide(color: const Color(0xFFFB7185).withOpacity(0.3)),
+                      backgroundColor: const Color(0xFF2C0717),
+                      side: const BorderSide(color: Color(0xFFE11D48)),
                       avatar: const Icon(Icons.calendar_today, size: 14, color: Color(0xFFFB7185)),
                       label: Text(
                         '$dateLabel ($count پیام)',
@@ -248,15 +266,111 @@ class _ChatScreenState extends State<ChatScreen> {
     );
   }
 
+  void _showMessageOptions(PulseMessageModel msg) {
+    final isMe = msg.isSender;
+
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: const Color(0xFF200511),
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(22)),
+        side: BorderSide(color: Color(0xFFE11D48)),
+      ),
+      builder: (ctx) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            // Reply
+            ListTile(
+              leading: const Icon(Icons.reply_rounded, color: Color(0xFFFB7185)),
+              title: const Text('پاسخ به این پیام (ریپلای)', style: TextStyle(color: Colors.white, fontSize: 14)),
+              onTap: () {
+                Navigator.pop(ctx);
+                setState(() => _replyingToMessage = msg);
+              },
+            ),
+
+            // Edit (only if sender)
+            if (isMe)
+              ListTile(
+                leading: const Icon(Icons.edit_outlined, color: Color(0xFFFB7185)),
+                title: const Text('ویرایش پیام', style: TextStyle(color: Colors.white, fontSize: 14)),
+                onTap: () {
+                  Navigator.pop(ctx);
+                  _showEditDialog(msg);
+                },
+              ),
+
+            // Delete
+            ListTile(
+              leading: const Icon(Icons.delete_outline_rounded, color: Colors.redAccent),
+              title: const Text('حذف پیام', style: TextStyle(color: Colors.redAccent, fontSize: 14)),
+              onTap: () async {
+                Navigator.pop(ctx);
+                await TimeCapsuleService.deleteMessage(msg.id);
+                await ServerlessRelayAdapter.sendDelete(messageId: msg.id);
+                _loadMessages();
+              },
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  void _showEditDialog(PulseMessageModel msg) {
+    final editCtrl = TextEditingController(text: msg.content);
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: const Color(0xFF220512),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(20),
+          side: const BorderSide(color: Color(0xFFE11D48)),
+        ),
+        title: const Text('ویرایش پیام', textDirection: TextDirection.rtl, style: TextStyle(color: Colors.white, fontSize: 15)),
+        content: TextField(
+          controller: editCtrl,
+          textDirection: TextDirection.rtl,
+          style: const TextStyle(color: Colors.white),
+          decoration: const InputDecoration(
+            filled: true,
+            fillColor: Color(0xFF14030B),
+            border: OutlineInputBorder(borderSide: BorderSide.none),
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('انصراف', style: TextStyle(color: Colors.white54)),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFFE11D48)),
+            onPressed: () async {
+              final newTxt = editCtrl.text.trim();
+              if (newTxt.isNotEmpty) {
+                await TimeCapsuleService.editMessage(msg.id, newTxt);
+                await ServerlessRelayAdapter.sendEdit(messageId: msg.id, newContent: newTxt);
+                Navigator.pop(ctx);
+                _loadMessages();
+              }
+            },
+            child: const Text('ذخیره ویرایش', style: TextStyle(color: Colors.white)),
+          ),
+        ],
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final activeContact = ContactManager.getActiveContact();
 
     return Directionality(
-      textDirection: TextDirection.rtl, // 100% Right-To-Left across Scaffold & AppBar
+      textDirection: TextDirection.rtl, // 100% RTL globally across entire screen!
       child: Scaffold(
         key: _scaffoldKey,
-        backgroundColor: const Color(0xFF0D0307), // Dark Velvet Crimson
+        backgroundColor: const Color(0xFF0C0206), // Deep Dark Obsidian Red
         drawer: PulseNavigationDrawer(
           onEmergencyPanic: widget.onEmergencyPanic,
           onContactSwitched: () {
@@ -266,51 +380,68 @@ class _ChatScreenState extends State<ChatScreen> {
           },
         ),
         appBar: AppBar(
-          backgroundColor: const Color(0xFF1A050E),
+          backgroundColor: const Color(0xFF220512), // Deep Wine AppBar
           elevation: 0,
-          // Leading is on the RIGHT in RTL -> Hamburger Menu on the RIGHT!
           leading: IconButton(
             icon: const Icon(Icons.menu_rounded, color: Colors.white, size: 26),
-            tooltip: 'منوی کاربری و مخاطبان (مانند اسنپ)',
+            tooltip: 'منوی کاربری و مخاطبان',
             onPressed: () => _scaffoldKey.currentState?.openDrawer(),
           ),
           title: GestureDetector(
             onTap: () => _scaffoldKey.currentState?.openDrawer(),
             child: Row(
               children: [
+                // Avatar Badge
                 Container(
-                  width: 9,
-                  height: 9,
-                  decoration: const BoxDecoration(
-                    color: Color(0xFFE11D48),
+                  width: 36,
+                  height: 36,
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF38071E),
                     shape: BoxShape.circle,
+                    border: Border.all(color: const Color(0xFFE11D48), width: 1.5),
+                  ),
+                  child: Center(
+                    child: Text(activeContact?.avatarEmoji ?? '❤️', style: const TextStyle(fontSize: 18)),
                   ),
                 ),
-                const SizedBox(width: 8),
+                const SizedBox(width: 10),
                 Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        'گفتگو با: ${activeContact?.name ?? "پارتنر"}',
-                        style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold),
+                        activeContact?.name ?? "پارتنر",
+                        style: const TextStyle(fontSize: 14.5, fontWeight: FontWeight.bold, color: Colors.white),
                         overflow: TextOverflow.ellipsis,
                       ),
+                      // Online / Typing Status
                       Row(
                         children: [
-                          const Text('کد: ', style: TextStyle(fontSize: 10, color: Colors.white38)),
-                          Directionality(
-                            textDirection: TextDirection.ltr,
-                            child: Text(
-                              activeContact?.partnerCode.isEmpty ?? true ? "تنظیم نشده" : activeContact!.partnerCode,
-                              style: TextStyle(
-                                fontSize: 10.5,
-                                color: const Color(0xFFFB7185).withOpacity(0.95),
-                                fontFamily: 'monospace',
-                                fontWeight: FontWeight.bold,
+                          if (_isPartnerTyping) ...[
+                            const Text(
+                              'در حال نوشتن... ✍️',
+                              style: TextStyle(fontSize: 11, color: Color(0xFFFB7185), fontWeight: FontWeight.bold),
+                            ),
+                          ] else if (_isPartnerOnline) ...[
+                            Container(
+                              width: 7,
+                              height: 7,
+                              decoration: const BoxDecoration(
+                                color: Color(0xFF10B981),
+                                shape: BoxShape.circle,
                               ),
                             ),
-                          ),
+                            const SizedBox(width: 4),
+                            const Text(
+                              'آنلاین',
+                              style: TextStyle(fontSize: 10.5, color: Color(0xFF10B981), fontWeight: FontWeight.w600),
+                            ),
+                          ] else ...[
+                            Text(
+                              'کد: ${activeContact?.partnerCode.isEmpty ?? true ? "تنظیم نشده" : activeContact!.partnerCode}',
+                              style: TextStyle(fontSize: 10, color: Colors.white.withOpacity(0.5)),
+                            ),
+                          ],
                         ],
                       ),
                     ],
@@ -319,11 +450,16 @@ class _ChatScreenState extends State<ChatScreen> {
               ],
             ),
           ),
-          // Actions are on the LEFT in RTL
           actions: [
+            // Calendar Jump Button
+            IconButton(
+              icon: const Icon(Icons.calendar_month_outlined, color: Color(0xFFFB7185)),
+              tooltip: 'تقویم خورشیدی و پرش به روز خاص',
+              onPressed: _openCalendarPicker,
+            ),
             // Dashboard button
             IconButton(
-              icon: const Icon(Icons.dashboard_outlined, color: Color(0xFFFB7185)),
+              icon: const Icon(Icons.dashboard_outlined, color: Colors.white70),
               tooltip: 'داشبورد کدهای جفت‌سازی',
               onPressed: () {
                 UserDashboardDialog.show(context, onDataChanged: () {
@@ -331,12 +467,6 @@ class _ChatScreenState extends State<ChatScreen> {
                   setState(() {});
                 });
               },
-            ),
-            // Calendar Jump Button
-            IconButton(
-              icon: const Icon(Icons.calendar_month_outlined, color: Color(0xFFFB7185)),
-              tooltip: 'تقویم شمسی و پرش به روز خاص',
-              onPressed: _openCalendarPicker,
             ),
             // Panic Disguise Button
             IconButton(
@@ -369,9 +499,9 @@ class _ChatScreenState extends State<ChatScreen> {
                                 margin: const EdgeInsets.symmetric(vertical: 14),
                                 padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 5),
                                 decoration: BoxDecoration(
-                                  color: const Color(0xFF220613),
+                                  color: const Color(0xFF220512),
                                   borderRadius: BorderRadius.circular(16),
-                                  border: Border.all(color: const Color(0xFFE11D48).withOpacity(0.2)),
+                                  border: Border.all(color: const Color(0xFFE11D48).withOpacity(0.3)),
                                 ),
                                 child: Text(
                                   dateHeader,
@@ -392,8 +522,8 @@ class _ChatScreenState extends State<ChatScreen> {
                     ),
             ),
 
-            // Reply Preview Bar (if active)
-            if (_replyingToMessage != null) _buildReplyPreviewBanner(),
+            // Reply Preview Banner
+            if (_replyingToMessage != null) _buildReplyBar(),
 
             // Pinned Bottom Chat Input Bar
             _buildBottomInputBar(),
@@ -410,15 +540,15 @@ class _ChatScreenState extends State<ChatScreen> {
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Icon(Icons.mark_email_unread_outlined, size: 54, color: const Color(0xFFFB7185).withOpacity(0.3)),
+            Icon(Icons.mark_email_unread_outlined, size: 54, color: const Color(0xFFE11D48).withOpacity(0.3)),
             const SizedBox(height: 16),
             const Text(
               'هنوز پیامی در این فضا رد و بدل نشده است',
-              style: TextStyle(color: Colors.white60, fontSize: 14),
+              style: TextStyle(color: Colors.white70, fontSize: 14),
             ),
             const SizedBox(height: 6),
             const Text(
-              'اولین پیام عاشقانه یا متنی را ارسال فرمایید ❤️',
+              'اولین پالس عاشقانه یا پیام را ارسال کنید ❤️',
               style: TextStyle(color: Colors.white38, fontSize: 12),
             ),
           ],
@@ -427,61 +557,47 @@ class _ChatScreenState extends State<ChatScreen> {
     );
   }
 
-  /// Banner displayed above input when user is replying to a message
-  Widget _buildReplyPreviewBanner() {
+  Widget _buildReplyBar() {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
       decoration: const BoxDecoration(
-        color: Color(0xFF200713),
+        color: Color(0xFF280716),
         border: Border(
           top: BorderSide(color: Color(0xFFE11D48), width: 1.5),
+          right: BorderSide(color: Color(0xFFE11D48), width: 4),
         ),
       ),
       child: Row(
         children: [
-          Container(
-            width: 4,
-            height: 36,
-            decoration: BoxDecoration(
-              color: const Color(0xFFE11D48),
-              borderRadius: BorderRadius.circular(2),
-            ),
-          ),
-          const SizedBox(width: 10),
+          const Icon(Icons.reply_rounded, color: Color(0xFFFB7185), size: 18),
+          const SizedBox(width: 8),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               mainAxisSize: MainAxisSize.min,
               children: [
                 Text(
-                  'پاسخ به ${_replyingToMessage!.isSender ? "پیام خودتان" : "پیام مخاطب"}:',
-                  style: const TextStyle(
-                    color: Color(0xFFFB7185),
-                    fontSize: 11,
-                    fontWeight: FontWeight.bold,
-                  ),
+                  'پاسخ به ${_replyingToMessage!.isSender ? "پیام شما" : "پیام پارتنر"}',
+                  style: const TextStyle(color: Color(0xFFFB7185), fontSize: 11, fontWeight: FontWeight.bold),
                 ),
                 Text(
                   _replyingToMessage!.content,
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
-                  style: TextStyle(color: Colors.white.withOpacity(0.75), fontSize: 12.5),
+                  style: const TextStyle(color: Colors.white70, fontSize: 12),
                 ),
               ],
             ),
           ),
           IconButton(
-            icon: const Icon(Icons.close_rounded, color: Colors.white60, size: 18),
-            onPressed: _cancelReply,
-            padding: EdgeInsets.zero,
-            constraints: const BoxConstraints(),
+            icon: const Icon(Icons.close_rounded, color: Colors.white54, size: 18),
+            onPressed: () => setState(() => _replyingToMessage = null),
           ),
         ],
       ),
     );
   }
 
-  /// Selects appropriate visual representation based on whether message is a Romantic Canvas or Plain Chat
   Widget _buildMessageBubble(PulseMessageModel msg) {
     if (msg.isCanvas) {
       return _buildRomanticCanvasCard(msg);
@@ -490,46 +606,7 @@ class _ChatScreenState extends State<ChatScreen> {
     }
   }
 
-  /// Quoted Reply Box rendered inside a message bubble
-  Widget _buildQuotedReplySnippet(PulseMessageModel msg) {
-    if (msg.replyToContent == null || msg.replyToContent!.isEmpty) {
-      return const SizedBox.shrink();
-    }
-
-    return Container(
-      margin: const EdgeInsets.only(bottom: 8),
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-      decoration: BoxDecoration(
-        color: Colors.black.withOpacity(0.35),
-        borderRadius: BorderRadius.circular(8),
-        border: const Border(
-          right: BorderSide(color: Color(0xFFE11D48), width: 3),
-        ),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            msg.replyToSender ?? 'پاسخ:',
-            style: const TextStyle(
-              color: Color(0xFFFB7185),
-              fontSize: 10.5,
-              fontWeight: FontWeight.bold,
-            ),
-          ),
-          const SizedBox(height: 2),
-          Text(
-            msg.replyToContent!,
-            maxLines: 2,
-            overflow: TextOverflow.ellipsis,
-            style: TextStyle(color: Colors.white.withOpacity(0.8), fontSize: 12),
-          ),
-        ],
-      ),
-    );
-  }
-
-  /// 1. Ornate Romantic Canvas Card (پیام‌های بوم آماده با رنگ اختصاصی، پارتیکل متحرک و دکمه مشاهده تمام‌صفحه)
+  /// 1. Ornate Romantic Canvas Card (کارت بوم رمانتیک با رنگ تیره قرمز، ذرات متحرک و دکمه بوم زنده)
   Widget _buildRomanticCanvasCard(PulseMessageModel msg) {
     final isMe = msg.isSender;
 
@@ -537,7 +614,7 @@ class _ChatScreenState extends State<ChatScreen> {
     try {
       baseColor = Color(int.parse(msg.customBgColor.replaceFirst('#', '0xFF')));
     } catch (_) {
-      baseColor = const Color(0xFF2D0B1E);
+      baseColor = const Color(0xFF2D0817);
     }
 
     String particleLabel;
@@ -577,7 +654,7 @@ class _ChatScreenState extends State<ChatScreen> {
           crossAxisAlignment: isMe ? CrossAxisAlignment.end : CrossAxisAlignment.start,
           children: [
             GestureDetector(
-              onLongPress: () => _initiateReply(msg),
+              onLongPress: () => _showMessageOptions(msg),
               child: Container(
                 padding: const EdgeInsets.all(16),
                 decoration: BoxDecoration(
@@ -586,18 +663,17 @@ class _ChatScreenState extends State<ChatScreen> {
                     end: Alignment.bottomRight,
                     colors: [
                       baseColor.withOpacity(0.95),
-                      baseColor.withOpacity(0.65),
-                      const Color(0xFF14030A),
+                      const Color(0xFF1B030D),
                     ],
                   ),
                   borderRadius: BorderRadius.circular(22),
                   border: Border.all(
-                    color: const Color(0xFFFB7185).withOpacity(0.6),
+                    color: const Color(0xFFE11D48).withOpacity(0.65),
                     width: 1.5,
                   ),
                   boxShadow: [
                     BoxShadow(
-                      color: baseColor.withOpacity(0.5),
+                      color: const Color(0xFFE11D48).withOpacity(0.25),
                       blurRadius: 14,
                       offset: const Offset(0, 4),
                     ),
@@ -606,6 +682,9 @@ class _ChatScreenState extends State<ChatScreen> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
+                    // Reply header if message is a reply
+                    if (msg.replyToContent != null) _buildSnippetInBubble(msg),
+
                     // Top Ornate Badge Row
                     Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -633,52 +712,34 @@ class _ChatScreenState extends State<ChatScreen> {
                             ],
                           ),
                         ),
-                        Row(
-                          children: [
-                            Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                              decoration: BoxDecoration(
-                                color: const Color(0xFFFB7185).withOpacity(0.2),
-                                borderRadius: BorderRadius.circular(8),
-                              ),
-                              child: Text(
-                                'دسته: ${msg.category}',
-                                style: const TextStyle(
-                                  color: Color(0xFFFB7185),
-                                  fontSize: 10,
-                                  fontWeight: FontWeight.bold,
-                                ),
-                              ),
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFFE11D48).withOpacity(0.2),
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          child: Text(
+                            'دسته: ${msg.category}',
+                            style: const TextStyle(
+                              color: Color(0xFFFB7185),
+                              fontSize: 10,
+                              fontWeight: FontWeight.bold,
                             ),
-                            IconButton(
-                              icon: const Icon(Icons.reply_rounded, color: Colors.white60, size: 18),
-                              tooltip: 'پاسخ دادن (ریپلای)',
-                              padding: EdgeInsets.zero,
-                              constraints: const BoxConstraints(),
-                              onPressed: () => _initiateReply(msg),
-                            ),
-                          ],
+                          ),
                         ),
                       ],
                     ),
-                    const SizedBox(height: 10),
+                    const SizedBox(height: 12),
 
-                    // Quoted Reply (if replying to another message)
-                    _buildQuotedReplySnippet(msg),
-
-                    // Message Text with rich romantic typography (Right aligned)
+                    // Message Text
                     Text(
                       msg.content,
                       textDirection: TextDirection.rtl,
-                      textAlign: TextAlign.right,
                       style: const TextStyle(
                         color: Colors.white,
                         fontSize: 15.5,
                         height: 1.5,
                         fontWeight: FontWeight.w600,
-                        shadows: [
-                          Shadow(color: Colors.black54, blurRadius: 4, offset: Offset(0, 1)),
-                        ],
                       ),
                     ),
                     const SizedBox(height: 14),
@@ -686,12 +747,12 @@ class _ChatScreenState extends State<ChatScreen> {
                     // Interactive "View Fullscreen Live Canvas" Button
                     ElevatedButton.icon(
                       style: ElevatedButton.styleFrom(
-                        backgroundColor: Colors.white.withOpacity(0.15),
+                        backgroundColor: const Color(0xFFE11D48).withOpacity(0.25),
                         elevation: 0,
                         padding: const EdgeInsets.symmetric(vertical: 8),
                         shape: RoundedRectangleBorder(
                           borderRadius: BorderRadius.circular(12),
-                          side: BorderSide(color: Colors.white.withOpacity(0.3)),
+                          side: const BorderSide(color: Color(0xFFE11D48)),
                         ),
                       ),
                       onPressed: () => _openMessageCanvas(msg),
@@ -703,10 +764,13 @@ class _ChatScreenState extends State<ChatScreen> {
                     ),
                     const SizedBox(height: 8),
 
-                    // Meta: Time, Status
+                    // Meta: Time, Edited & Status
                     Row(
                       mainAxisAlignment: MainAxisAlignment.end,
                       children: [
+                        if (msg.isEdited) ...[
+                          const Text('(ویرایش‌شده) ', style: TextStyle(color: Colors.white38, fontSize: 9.5)),
+                        ],
                         Text(
                           PersianDateHelper.formatTime(msg.createdAt),
                           style: TextStyle(color: Colors.white.withOpacity(0.6), fontSize: 10),
@@ -730,7 +794,7 @@ class _ChatScreenState extends State<ChatScreen> {
     );
   }
 
-  /// 2. Standard Sleek Chat Bubble (حباب‌های چت سریع و متنی بدون پس‌زمینه بوم)
+  /// 2. Standard Sleek Chat Bubble (حباب‌های چت سریع با گرادیانت قرمز تیره)
   Widget _buildStandardChatBubble(PulseMessageModel msg) {
     final isMe = msg.isSender;
 
@@ -743,13 +807,13 @@ class _ChatScreenState extends State<ChatScreen> {
           crossAxisAlignment: isMe ? CrossAxisAlignment.end : CrossAxisAlignment.start,
           children: [
             GestureDetector(
-              onLongPress: () => _initiateReply(msg),
+              onLongPress: () => _showMessageOptions(msg),
               child: Container(
                 padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
                 decoration: BoxDecoration(
                   gradient: isMe
                       ? const LinearGradient(colors: [Color(0xFF881337), Color(0xFFBE123C)])
-                      : const LinearGradient(colors: [Color(0xFF1E0612), Color(0xFF2B0A1C)]),
+                      : const LinearGradient(colors: [Color(0xFF1E040E), Color(0xFF280717)]),
                   borderRadius: BorderRadius.only(
                     topRight: const Radius.circular(16),
                     topLeft: const Radius.circular(16),
@@ -757,7 +821,7 @@ class _ChatScreenState extends State<ChatScreen> {
                     bottomRight: Radius.circular(isMe ? 4 : 16),
                   ),
                   border: Border.all(
-                    color: isMe ? const Color(0xFFFB7185).withOpacity(0.4) : const Color(0xFFE11D48).withOpacity(0.2),
+                    color: isMe ? const Color(0xFFFB7185).withOpacity(0.4) : const Color(0xFFE11D48).withOpacity(0.3),
                   ),
                   boxShadow: const [
                     BoxShadow(color: Colors.black38, blurRadius: 6, offset: Offset(0, 2)),
@@ -766,34 +830,26 @@ class _ChatScreenState extends State<ChatScreen> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    // Quoted Reply (if any)
-                    _buildQuotedReplySnippet(msg),
-
-                    // Main Message Text (RTL & Right Aligned)
+                    if (msg.replyToContent != null) _buildSnippetInBubble(msg),
                     Text(
                       msg.content,
                       textDirection: TextDirection.rtl,
-                      textAlign: TextAlign.right,
                       style: const TextStyle(
                         color: Colors.white,
                         fontSize: 14,
-                        height: 1.45,
+                        height: 1.4,
                       ),
                     ),
                     const SizedBox(height: 5),
-
-                    // Meta: Time, Reply action, and Status
                     Row(
                       mainAxisSize: MainAxisSize.min,
                       children: [
+                        if (msg.isEdited) ...[
+                          const Text('(ویرایش‌شده) ', style: TextStyle(color: Colors.white38, fontSize: 9.5)),
+                        ],
                         Text(
                           PersianDateHelper.formatTime(msg.createdAt),
                           style: TextStyle(color: Colors.white.withOpacity(0.55), fontSize: 10),
-                        ),
-                        const SizedBox(width: 6),
-                        GestureDetector(
-                          onTap: () => _initiateReply(msg),
-                          child: const Icon(Icons.reply_rounded, color: Colors.white38, size: 14),
                         ),
                         if (isMe) ...[
                           const SizedBox(width: 4),
@@ -814,14 +870,43 @@ class _ChatScreenState extends State<ChatScreen> {
     );
   }
 
+  Widget _buildSnippetInBubble(PulseMessageModel msg) {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 6),
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+      decoration: BoxDecoration(
+        color: Colors.black26,
+        borderRadius: BorderRadius.circular(8),
+        border: const Border(
+          right: BorderSide(color: Color(0xFFFB7185), width: 3),
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            msg.replyToSender ?? 'پاسخ',
+            style: const TextStyle(color: Color(0xFFFB7185), fontSize: 10.5, fontWeight: FontWeight.bold),
+          ),
+          Text(
+            msg.replyToContent ?? '',
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: TextStyle(color: Colors.white.withOpacity(0.7), fontSize: 11),
+          ),
+        ],
+      ),
+    );
+  }
+
   Widget _buildStatusIcon(PulseMessageModel msg) {
     if (msg.status == 'seen') {
       return Row(
         mainAxisSize: MainAxisSize.min,
         children: const [
-          Icon(Icons.done_all, size: 14, color: Color(0xFFF43F5E)),
+          Icon(Icons.done_all, size: 14, color: Color(0xFFFB7185)),
           SizedBox(width: 2),
-          Text('دیده شد', style: TextStyle(color: Color(0xFFF43F5E), fontSize: 9.5, fontWeight: FontWeight.bold)),
+          Text('دیده شد', style: TextStyle(color: Color(0xFFFB7185), fontSize: 9.5, fontWeight: FontWeight.bold)),
         ],
       );
     } else if (msg.status == 'delivered') {
@@ -846,22 +931,19 @@ class _ChatScreenState extends State<ChatScreen> {
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          // 1. Display existing reactions
           if (msg.reactions.isNotEmpty)
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
               decoration: BoxDecoration(
-                color: const Color(0xFF260614),
+                color: const Color(0xFF2B0616),
                 borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: const Color(0xFFE11D48).withOpacity(0.3)),
+                border: Border.all(color: const Color(0xFFE11D48).withOpacity(0.4)),
               ),
               child: Text(
                 msg.reactions.join(' '),
                 style: const TextStyle(fontSize: 13),
               ),
             ),
-
-          // 2. Reaction Picker: STRICTLY ONLY RECIPIENT CAN REACT!
           if (!isMe) ...[
             const SizedBox(width: 6),
             ..._reactionEmojis.map((emoji) {
@@ -887,8 +969,8 @@ class _ChatScreenState extends State<ChatScreen> {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
       decoration: const BoxDecoration(
-        color: Color(0xFF16040B),
-        border: Border(top: BorderSide(color: Color(0xFF3D0B1B))),
+        color: Color(0xFF1E040E),
+        border: Border(top: BorderSide(color: Color(0xFFE11D48), width: 1.5)),
       ),
       child: SafeArea(
         top: false,
@@ -897,16 +979,14 @@ class _ChatScreenState extends State<ChatScreen> {
             Expanded(
               child: Container(
                 decoration: BoxDecoration(
-                  color: const Color(0xFF100207),
+                  color: const Color(0xFF120309),
                   borderRadius: BorderRadius.circular(22),
-                  border: Border.all(color: const Color(0xFFE11D48).withOpacity(0.2)),
+                  border: Border.all(color: const Color(0xFFE11D48).withOpacity(0.35)),
                 ),
                 padding: const EdgeInsets.symmetric(horizontal: 14),
                 child: TextField(
                   controller: _msgInputController,
-                  focusNode: _inputFocusNode,
                   textDirection: TextDirection.rtl,
-                  textAlign: TextAlign.right,
                   style: const TextStyle(color: Colors.white, fontSize: 14),
                   decoration: const InputDecoration(
                     hintText: 'ارسال پیام کوتاه...',
@@ -922,13 +1002,13 @@ class _ChatScreenState extends State<ChatScreen> {
             GestureDetector(
               onTap: _sendQuickChatMessage,
               child: Container(
-                width: 42,
-                height: 42,
+                width: 44,
+                height: 44,
                 decoration: const BoxDecoration(
-                  gradient: LinearGradient(colors: [Color(0xFFE11D48), Color(0xFF9F1239)]),
+                  gradient: LinearGradient(colors: [Color(0xFFE11D48), Color(0xFF881337)]),
                   shape: BoxShape.circle,
                 ),
-                child: const Icon(Icons.send_rounded, color: Colors.white, size: 19),
+                child: const Icon(Icons.send_rounded, color: Colors.white, size: 20),
               ),
             ),
           ],

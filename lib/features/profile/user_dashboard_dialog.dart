@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import '../pairing/pairing_manager.dart';
-import '../notifications/unkillable_notification_service.dart';
 import 'contact_manager.dart';
+import '../notifications/unkillable_notification_service.dart';
 
 class UserDashboardDialog extends StatefulWidget {
   final VoidCallback onDataChanged;
@@ -60,25 +60,32 @@ class _UserDashboardDialogState extends State<UserDashboardDialog> {
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
-        backgroundColor: const Color(0xFF1E0713),
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        backgroundColor: const Color(0xFF220512),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(20),
+          side: const BorderSide(color: Color(0xFFE11D48)),
+        ),
         title: Text(
           'ویرایش کد $_activeContactName',
           textDirection: TextDirection.rtl,
           style: const TextStyle(color: Colors.white, fontSize: 16),
         ),
-        content: TextField(
-          controller: controller,
-          textAlign: TextAlign.center,
-          style: const TextStyle(color: Colors.white, fontSize: 18, letterSpacing: 4, fontWeight: FontWeight.bold),
-          textCapitalization: TextCapitalization.characters,
-          maxLength: 6,
-          decoration: InputDecoration(
-            hintText: 'کد ۶ رقمی',
-            hintStyle: TextStyle(color: Colors.white.withOpacity(0.3), letterSpacing: 2),
-            filled: true,
-            fillColor: const Color(0xFF12030A),
-            border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
+        content: Directionality(
+          textDirection: TextDirection.ltr,
+          child: TextField(
+            controller: controller,
+            textAlign: TextAlign.center,
+            style: const TextStyle(color: Colors.white, fontSize: 20, letterSpacing: 4, fontWeight: FontWeight.bold, fontFamily: 'monospace'),
+            textCapitalization: TextCapitalization.characters,
+            maxLength: 6,
+            decoration: InputDecoration(
+              counterText: '',
+              hintText: 'کد ۶ رقمی',
+              hintStyle: TextStyle(color: Colors.white.withOpacity(0.3), letterSpacing: 2),
+              filled: true,
+              fillColor: const Color(0xFF14030B),
+              border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
+            ),
           ),
         ),
         actions: [
@@ -114,13 +121,13 @@ class _UserDashboardDialogState extends State<UserDashboardDialog> {
   @override
   Widget build(BuildContext context) {
     return Dialog(
-      backgroundColor: const Color(0xFF14040B),
+      backgroundColor: const Color(0xFF1A040D),
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
       child: Container(
         padding: const EdgeInsets.all(22),
         decoration: BoxDecoration(
           borderRadius: BorderRadius.circular(24),
-          border: Border.all(color: const Color(0xFFE11D48).withOpacity(0.35)),
+          border: Border.all(color: const Color(0xFFE11D48), width: 1.5),
         ),
         child: _isLoading
             ? const SizedBox(height: 200, child: Center(child: CircularProgressIndicator(color: Color(0xFFE11D48))))
@@ -148,15 +155,15 @@ class _UserDashboardDialogState extends State<UserDashboardDialog> {
                       ),
                     ],
                   ),
-                  const Divider(color: Color(0xFF4C0B20), height: 20),
+                  const Divider(color: Colors.white12, height: 20),
 
-                  // 1. My Pairing Code Card (STRICTLY LTR FORMATTED)
+                  // 1. My Pairing Code Card (Wrapped in Directionality LTR!)
                   Container(
                     padding: const EdgeInsets.all(16),
                     decoration: BoxDecoration(
-                      color: const Color(0xFF220713),
+                      color: const Color(0xFF280717),
                       borderRadius: BorderRadius.circular(16),
-                      border: Border.all(color: const Color(0xFFFB7185).withOpacity(0.4)),
+                      border: Border.all(color: const Color(0xFFE11D48).withOpacity(0.5)),
                     ),
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
@@ -195,7 +202,7 @@ class _UserDashboardDialogState extends State<UserDashboardDialog> {
                         Center(
                           child: Text(
                             'این کد را در گوشی مخاطب/پارتنر وارد نمایید',
-                            style: TextStyle(color: Colors.white.withOpacity(0.5), fontSize: 11),
+                            style: TextStyle(color: Colors.white.withOpacity(0.6), fontSize: 11),
                           ),
                         ),
                       ],
@@ -204,11 +211,11 @@ class _UserDashboardDialogState extends State<UserDashboardDialog> {
 
                   const SizedBox(height: 14),
 
-                  // 2. Partner Pairing Code Card (STRICTLY LTR FORMATTED)
+                  // 2. Partner Pairing Code Card (Wrapped in Directionality LTR!)
                   Container(
                     padding: const EdgeInsets.all(16),
                     decoration: BoxDecoration(
-                      color: const Color(0xFF16040C),
+                      color: const Color(0xFF16030B),
                       borderRadius: BorderRadius.circular(16),
                       border: Border.all(color: Colors.white12),
                     ),
@@ -248,7 +255,7 @@ class _UserDashboardDialogState extends State<UserDashboardDialog> {
                                 color: _partnerCode == 'ثبت نشده' ? Colors.white38 : Colors.white,
                                 fontSize: 24,
                                 fontWeight: FontWeight.w800,
-                                letterSpacing: 4,
+                                letterSpacing: 5,
                                 fontFamily: 'monospace',
                               ),
                             ),
@@ -258,40 +265,40 @@ class _UserDashboardDialogState extends State<UserDashboardDialog> {
                     ),
                   ),
 
-                  const SizedBox(height: 14),
+                  const SizedBox(height: 16),
 
-                  // Test notification button
-                  OutlinedButton.icon(
-                    style: OutlinedButton.styleFrom(
-                      foregroundColor: const Color(0xFFFB7185),
-                      side: const BorderSide(color: Color(0xFFE11D48)),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                  // Test notification button inside dashboard
+                  ElevatedButton.icon(
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: const Color(0xFFE11D48),
                       padding: const EdgeInsets.symmetric(vertical: 10),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                     ),
                     onPressed: () async {
                       await UnkillableNotificationService.testNotification();
                       ScaffoldMessenger.of(context).showSnackBar(
                         const SnackBar(
-                          content: Text('اعلان آزمایشی به گوشی شما ارسال شد', textDirection: TextDirection.rtl),
-                          backgroundColor: Color(0xFFE11D48),
+                          content: Text('نوتیفیکیشن تست با صدا و ویبره اجرا شد!', textDirection: TextDirection.rtl),
+                          backgroundColor: Color(0xFF10B981),
+                          duration: Duration(seconds: 2),
                         ),
                       );
                     },
-                    icon: const Icon(Icons.notifications_active_outlined, size: 18),
-                    label: const Text('تست و بررسی صدای نوتیفیکیشن', style: TextStyle(fontWeight: FontWeight.bold)),
+                    icon: const Icon(Icons.notifications_active_rounded, color: Colors.white, size: 18),
+                    label: const Text('تست زنده نوتیفیکیشن', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
                   ),
 
                   const SizedBox(height: 10),
 
                   // Close button
-                  ElevatedButton(
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: const Color(0xFFE11D48),
-                      padding: const EdgeInsets.symmetric(vertical: 12),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                  OutlinedButton(
+                    style: OutlinedButton.styleFrom(
+                      side: const BorderSide(color: Colors.white24),
+                      padding: const EdgeInsets.symmetric(vertical: 10),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                     ),
                     onPressed: () => Navigator.pop(context),
-                    child: const Text('بستن داشبورد', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                    child: const Text('بستن', style: TextStyle(color: Colors.white70)),
                   ),
                 ],
               ),

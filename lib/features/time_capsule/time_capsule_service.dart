@@ -21,13 +21,15 @@ class PulseMessageModel {
   String? replyToId;
   String? replyToContent;
   String? replyToSender;
+  bool isEdited;
+  bool isDeleted;
 
   PulseMessageModel({
     required this.id,
     required this.content,
     this.category = 'romantic',
     this.themeId = 'hearts',
-    this.customBgColor = '#2D0B1E',
+    this.customBgColor = '#2D0817',
     this.particleType = 'heart',
     required this.scheduledUnlockTime,
     this.status = 'sent',
@@ -40,6 +42,8 @@ class PulseMessageModel {
     this.replyToId,
     this.replyToContent,
     this.replyToSender,
+    this.isEdited = false,
+    this.isDeleted = false,
   })  : reactions = reactions ?? [],
         isCanvas = isCanvas ?? (particleType != 'none' && themeId != 'chat_text');
 
@@ -64,6 +68,8 @@ class PulseMessageModel {
     'replyToId': replyToId,
     'replyToContent': replyToContent,
     'replyToSender': replyToSender,
+    'isEdited': isEdited,
+    'isDeleted': isDeleted,
   };
 
   factory PulseMessageModel.fromJson(Map<String, dynamic> json, {bool? overrideIsSender}) => PulseMessageModel(
@@ -71,7 +77,7 @@ class PulseMessageModel {
     content: json['content'] ?? '',
     category: json['category'] ?? 'romantic',
     themeId: json['themeId'] ?? 'hearts',
-    customBgColor: json['customBgColor'] ?? '#2D0B1E',
+    customBgColor: json['customBgColor'] ?? '#2D0817',
     particleType: json['particleType'] ?? 'heart',
     scheduledUnlockTime: DateTime.parse(json['scheduledUnlockTime'] ?? DateTime.now().toIso8601String()),
     status: json['status'] ?? 'sent',
@@ -84,6 +90,8 @@ class PulseMessageModel {
     replyToId: json['replyToId'],
     replyToContent: json['replyToContent'],
     replyToSender: json['replyToSender'],
+    isEdited: json['isEdited'] ?? false,
+    isDeleted: json['isDeleted'] ?? false,
   );
 }
 
@@ -105,7 +113,6 @@ class TimeCapsuleService {
       final prefs = await SharedPreferences.getInstance();
       String? raw = prefs.getString(_getVaultKey(_activeContactId));
 
-      // Fallback/migration for the default partner if new key doesn't exist yet
       if ((raw == null || raw.isEmpty) && _activeContactId == 'contact_default') {
         raw = prefs.getString(AppConstants.keyStoredMessages);
       }
@@ -114,7 +121,10 @@ class TimeCapsuleService {
       if (raw != null && raw.isNotEmpty) {
         final List<dynamic> list = jsonDecode(raw);
         for (var item in list) {
-          _vault.add(PulseMessageModel.fromJson(item));
+          final msg = PulseMessageModel.fromJson(item);
+          if (!msg.isDeleted) {
+            _vault.add(msg);
+          }
         }
       }
     } catch (_) {}
@@ -130,7 +140,6 @@ class TimeCapsuleService {
     await _persist();
   }
 
-  /// Saves a message directly into a specific contact's vault (even if not currently active on screen)
   static Future<void> saveToContactVault(String contactId, PulseMessageModel message) async {
     if (contactId == _activeContactId) {
       await saveToVault(message);
@@ -158,6 +167,24 @@ class TimeCapsuleService {
     } catch (_) {}
   }
 
+  static Future<void> editMessage(String id, String newContent) async {
+    final idx = _vault.indexWhere((e) => e.id == id);
+    if (idx >= 0) {
+      _vault[idx].content = newContent;
+      _vault[idx].isEdited = true;
+      await _persist();
+    }
+  }
+
+  static Future<void> deleteMessage(String id) async {
+    final idx = _vault.indexWhere((e) => e.id == id);
+    if (idx >= 0) {
+      _vault[idx].isDeleted = true;
+      _vault.removeAt(idx);
+      await _persist();
+    }
+  }
+
   static Future<void> updateMessageStatus(String id, String newStatus, {DateTime? seenAt}) async {
     final idx = _vault.indexWhere((e) => e.id == id);
     if (idx >= 0) {
@@ -179,45 +206,12 @@ class TimeCapsuleService {
     }
   }
 
-  static Future<bool> recallCapsule({required String id}) async {
-    final index = _vault.indexWhere((e) => e.id == id);
-    if (index == -1) return false;
-
-    final capsule = _vault[index];
-    if (!capsule.canBeEditedOrRecalled) return false;
-
-    capsule.status = 'recalled';
-    _vault.removeAt(index);
-    await _persist();
-    return true;
-  }
-
-  static Future<bool> editCapsuleBeforeUnlock({
-    required String id,
-    required String newContent,
-    required String newThemeId,
-    required DateTime newTime,
-  }) async {
-    final index = _vault.indexWhere((e) => e.id == id);
-    if (index == -1) return false;
-
-    final capsule = _vault[index];
-    if (!capsule.canBeEditedOrRecalled) return false;
-
-    capsule.content = newContent;
-    capsule.themeId = newThemeId;
-    capsule.scheduledUnlockTime = newTime;
-    await _persist();
-    return true;
-  }
-
   static List<PulseMessageModel> getAllMessages() {
-    final list = List<PulseMessageModel>.from(_vault);
+    final list = _vault.where((e) => !e.isDeleted).toList();
     list.sort((a, b) => a.createdAt.compareTo(b.createdAt));
     return list;
   }
 
-  /// Groups messages by Jalali solar date string for Persian calendar timeline
   static Map<String, List<PulseMessageModel>> getMessagesGroupedByDate() {
     final messages = getAllMessages();
     final Map<String, List<PulseMessageModel>> grouped = {};
@@ -229,7 +223,6 @@ class TimeCapsuleService {
     return grouped;
   }
 
-  /// Returns sorted distinct Jalali date labels with their corresponding index
   static List<String> getDistinctJalaliDates() {
     return getMessagesGroupedByDate().keys.toList();
   }

@@ -95,7 +95,7 @@ jobs:
         with:
           tag_name: v1.3.0
           name: Pulse Health Native v1.3.0
-          body: "Official 100% Native Android Build for Pulse Health v1.3.0. New: Guaranteed Notification Engine v4 with System Alert & Instant Test Button, Reply to Messages (ریپلای), Right-Aligned RTL Drawer & Chat, Dark Crimson Velvet Theme (Navy Removed), Profile Avatars & Simplified Onboarding (No Partner Code required on entry)."
+          body: "Official 100% Native Android Build for Pulse Health v1.3.0. Major Updates: Guaranteed Heads-up Notifications with sound and vibration, Right-side Hamburger Navigation Menu, Reply to Message, Edit & Delete Message, Real-time Online/Offline Presence & Typing Indicator, Deep Dark Crimson Red Luxury Theme, Profile Avatar Chooser, Streamlined Onboarding without forced partner code, and Explicit LTR Code Alignment."
           files: build/app/outputs/flutter-apk/Pulse_Health_Native.apk
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

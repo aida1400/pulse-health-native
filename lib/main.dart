@@ -26,7 +26,6 @@ void main() async {
   } else {
     await TimeCapsuleService.loadVault();
   }
-  await UnkillableNotificationService.requestNotificationPermission();
   runApp(const PulseApp());
 }
 
@@ -44,7 +43,7 @@ class _PulseAppState extends State<PulseApp> with WidgetsBindingObserver {
 
   int _selectedVaultTab = 0; // 0: چت و تاریخچه, 1: ارسال پیام جدید
   String? _activeViewingMessage;
-  String _activeViewingCustomBg = '#2D0B1E';
+  String _activeViewingCustomBg = '#2D0817';
   String _activeViewingParticle = 'heart';
 
   @override
@@ -54,7 +53,11 @@ class _PulseAppState extends State<PulseApp> with WidgetsBindingObserver {
     _checkFirstRun();
     _initSensors();
     _initRelayListener();
-    UnkillableNotificationService.requestNotificationPermission();
+    _ensureNotificationPermission();
+  }
+
+  Future<void> _ensureNotificationPermission() async {
+    await UnkillableNotificationService.requestNotificationPermission();
   }
 
   @override
@@ -66,7 +69,6 @@ class _PulseAppState extends State<PulseApp> with WidgetsBindingObserver {
   }
 
   /// Instant Camouflage on Pause / Inactive / Background
-  /// "وقتی از برنامه لحظه ای خارج شد باز بره رو اضطرار"
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state == AppLifecycleState.paused ||
@@ -93,7 +95,6 @@ class _PulseAppState extends State<PulseApp> with WidgetsBindingObserver {
   void _initSensors() {
     PanicSensorService.startListening(
       onPanicTriggered: () {
-        // Immediate flip-down on desk or double-shake detected!
         if (_isSecretUnlocked || _activeViewingMessage != null) {
           setState(() {
             _isSecretUnlocked = false;
@@ -112,6 +113,12 @@ class _PulseAppState extends State<PulseApp> with WidgetsBindingObserver {
       onReceipt: () {
         if (mounted) setState(() {});
       },
+      onTyping: (sender, isTyping) {
+        if (mounted) setState(() {});
+      },
+      onPresence: (sender) {
+        if (mounted) setState(() {});
+      },
     );
   }
 
@@ -120,7 +127,7 @@ class _PulseAppState extends State<PulseApp> with WidgetsBindingObserver {
     await prefs.setBool(AppConstants.keyIsFirstRun, false);
     setState(() {
       _isFirstRun = false;
-      _isSecretUnlocked = false; // Always enter medical decoy
+      _isSecretUnlocked = false;
     });
   }
 
@@ -131,7 +138,7 @@ class _PulseAppState extends State<PulseApp> with WidgetsBindingObserver {
         debugShowCheckedModeBanner: false,
         theme: AppTheme.decoyTheme,
         home: const Scaffold(
-          backgroundColor: Color(0xFF0A0206),
+          backgroundColor: Color(0xFF0C0206),
           body: Center(child: CircularProgressIndicator(color: Color(0xFFE11D48))),
         ),
       );
@@ -189,29 +196,28 @@ class _PulseAppState extends State<PulseApp> with WidgetsBindingObserver {
     if (_isSecretUnlocked) {
       final activeContact = ContactManager.getActiveContact();
 
-      return Scaffold(
-        backgroundColor: const Color(0xFF0D0307),
-        body: _selectedVaultTab == 0
-            ? ChatScreen(
-                onEmergencyPanic: () => setState(() => _isSecretUnlocked = false),
-                onContactSwitched: () => setState(() {}),
-              )
-            : Directionality(
-                textDirection: TextDirection.rtl,
-                child: Scaffold(
-                  backgroundColor: const Color(0xFF0D0307),
+      return Directionality(
+        textDirection: TextDirection.rtl,
+        child: Scaffold(
+          backgroundColor: const Color(0xFF0C0206), // Deep Dark Crimson
+          body: _selectedVaultTab == 0
+              ? ChatScreen(
+                  onEmergencyPanic: () => setState(() => _isSecretUnlocked = false),
+                  onContactSwitched: () => setState(() {}),
+                )
+              : Scaffold(
+                  backgroundColor: const Color(0xFF0C0206),
                   drawer: PulseNavigationDrawer(
                     onEmergencyPanic: () => setState(() => _isSecretUnlocked = false),
                     onContactSwitched: () => setState(() {}),
                   ),
                   appBar: AppBar(
-                    backgroundColor: const Color(0xFF1A050E),
+                    backgroundColor: const Color(0xFF220512),
                     elevation: 0,
-                    // Leading on the RIGHT in RTL
                     leading: Builder(
                       builder: (ctx) => IconButton(
                         icon: const Icon(Icons.menu_rounded, color: Colors.white, size: 26),
-                        tooltip: 'منوی کاربری و مخاطبان (مانند اسنپ)',
+                        tooltip: 'منوی کاربری و مخاطبان',
                         onPressed: () => Scaffold.of(ctx).openDrawer(),
                       ),
                     ),
@@ -220,24 +226,11 @@ class _PulseAppState extends State<PulseApp> with WidgetsBindingObserver {
                       children: [
                         Text(
                           'ارسال بوم: ${activeContact?.name ?? "پارتنر"}',
-                          style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold),
+                          style: const TextStyle(fontSize: 14.5, fontWeight: FontWeight.bold, color: Colors.white),
                         ),
-                        Row(
-                          children: [
-                            const Text('کد: ', style: TextStyle(fontSize: 10, color: Colors.white38)),
-                            Directionality(
-                              textDirection: TextDirection.ltr,
-                              child: Text(
-                                activeContact?.partnerCode.isEmpty ?? true ? "تنظیم نشده" : activeContact!.partnerCode,
-                                style: TextStyle(
-                                  fontSize: 10.5,
-                                  color: const Color(0xFFFB7185).withOpacity(0.95),
-                                  fontFamily: 'monospace',
-                                  fontWeight: FontWeight.bold,
-                                ),
-                              ),
-                            ),
-                          ],
+                        Text(
+                          'کد متصل: ${activeContact?.partnerCode.isEmpty ?? true ? "تنظیم نشده" : activeContact!.partnerCode}',
+                          style: const TextStyle(fontSize: 10, color: Color(0xFFFB7185)),
                         ),
                       ],
                     ),
@@ -278,19 +271,16 @@ class _PulseAppState extends State<PulseApp> with WidgetsBindingObserver {
                         senderCode: myCode,
                         isSender: true,
                         createdAt: DateTime.now(),
-                        isCanvas: true, // Marked as Romantic Canvas Card
+                        isCanvas: true,
                       );
 
-                      // 1. Save to local vault
                       await TimeCapsuleService.saveToVault(capsule);
 
-                      // 2. Real cloud dispatch to partner via ntfy relay!
                       await ServerlessRelayAdapter.sendMessage(
                         message: capsule,
                         targetPartnerCode: currentPartner?.partnerCode,
                       );
 
-                      // 3. Open dynamic canvas preview
                       setState(() {
                         _activeViewingMessage = content;
                         _activeViewingCustomBg = customBgColor;
@@ -299,25 +289,25 @@ class _PulseAppState extends State<PulseApp> with WidgetsBindingObserver {
                     },
                   ),
                 ),
+          bottomNavigationBar: BottomNavigationBar(
+            backgroundColor: const Color(0xFF1A030C),
+            selectedItemColor: const Color(0xFFE11D48),
+            unselectedItemColor: Colors.white38,
+            currentIndex: _selectedVaultTab,
+            onTap: (idx) => setState(() => _selectedVaultTab = idx),
+            items: const [
+              BottomNavigationBarItem(
+                icon: Icon(Icons.chat_bubble_outline),
+                activeIcon: Icon(Icons.chat_bubble),
+                label: 'چت و تاریخچه',
               ),
-        bottomNavigationBar: BottomNavigationBar(
-          backgroundColor: const Color(0xFF16040B),
-          selectedItemColor: const Color(0xFFE11D48),
-          unselectedItemColor: Colors.white38,
-          currentIndex: _selectedVaultTab,
-          onTap: (idx) => setState(() => _selectedVaultTab = idx),
-          items: const [
-            BottomNavigationBarItem(
-              icon: Icon(Icons.chat_bubble_outline),
-              activeIcon: Icon(Icons.chat_bubble),
-              label: 'چت و تاریخچه',
-            ),
-            BottomNavigationBarItem(
-              icon: Icon(Icons.edit_note_outlined),
-              activeIcon: Icon(Icons.edit_note),
-              label: 'ارسال بوم عاشقانه',
-            ),
-          ],
+              BottomNavigationBarItem(
+                icon: Icon(Icons.palette_outlined),
+                activeIcon: Icon(Icons.palette),
+                label: 'ارسال بوم عاشقانه',
+              ),
+            ],
+          ),
         ),
       );
     }
