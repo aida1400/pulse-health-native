@@ -1,3 +1,4 @@
+import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import '../../core/app_constants.dart';
@@ -20,35 +21,46 @@ class UnkillableNotificationService {
       },
     );
 
-    // Create High-Priority Notification Channel with Custom Sound
-    const AndroidNotificationChannel channel = AndroidNotificationChannel(
+    // Create High-Priority Notification Channel v4 (Guaranteed Vibration & System Alert)
+    final Int64List vibrationPattern = Int64List.fromList([0, 350, 200, 350]);
+
+    final AndroidNotificationChannel channel = AndroidNotificationChannel(
       AppConstants.notificationChannelId,
       AppConstants.notificationChannelName,
       description: AppConstants.notificationChannelDescription,
       importance: Importance.max,
       playSound: true,
-      sound: RawResourceAndroidNotificationSound('soft_pulse'),
       enableVibration: true,
+      vibrationPattern: vibrationPattern,
       showBadge: true,
     );
 
-    await _notificationsPlugin
-        .resolvePlatformSpecificImplementation<AndroidFlutterLocalNotificationsPlugin>()
-        ?.createNotificationChannel(channel);
+    final androidImplementation = _notificationsPlugin
+        .resolvePlatformSpecificImplementation<AndroidFlutterLocalNotificationsPlugin>();
+
+    await androidImplementation?.createNotificationChannel(channel);
+
+    // Proactively request runtime notification permission on Android 13+ (API 33+)
+    await requestNotificationPermission();
   }
 
-  static Future<void> requestNotificationPermission() async {
-    await _notificationsPlugin
-        .resolvePlatformSpecificImplementation<AndroidFlutterLocalNotificationsPlugin>()
-        ?.requestNotificationsPermission();
+  /// Requests Android 13+ runtime POST_NOTIFICATIONS permission
+  static Future<bool> requestNotificationPermission() async {
+    try {
+      final androidImplementation = _notificationsPlugin
+          .resolvePlatformSpecificImplementation<AndroidFlutterLocalNotificationsPlugin>();
+      final granted = await androidImplementation?.requestNotificationsPermission();
+      return granted ?? false;
+    } catch (_) {
+      return false;
+    }
   }
 
   static Future<void> requestIgnoreBatteryOptimization() async {
-    // Triggers Android system intent to whitelist Pulse from battery killing
+    // Android battery optimization bypass hook
   }
 
   /// Dispatches the disguised notification that looks like a health update
-  /// Dynamically customized per message category
   static Future<void> showCamouflagedNotification({
     required int id,
     String category = 'romantic',
@@ -60,28 +72,42 @@ class UnkillableNotificationService {
     final title = catInfo['title'] ?? 'پایشگر پالس سلامت';
     final body = customDecoyText ?? catInfo['body'] ?? 'ثبت وضعیت جدید شاخص ریتم قلب';
 
-    const AndroidNotificationDetails androidDetails = AndroidNotificationDetails(
+    final Int64List vibrationPattern = Int64List.fromList([0, 350, 200, 350]);
+
+    final AndroidNotificationDetails androidDetails = AndroidNotificationDetails(
       AppConstants.notificationChannelId,
       AppConstants.notificationChannelName,
       channelDescription: AppConstants.notificationChannelDescription,
       importance: Importance.max,
-      priority: Priority.high,
-      ticker: 'پالس سلامت',
-      visibility: NotificationVisibility.private, // Masked on lockscreen
+      priority: Priority.max,
+      ticker: 'هشدار سلامت پالس',
+      visibility: NotificationVisibility.public, // Visible as medical alert on lockscreen
       playSound: true,
-      sound: RawResourceAndroidNotificationSound('soft_pulse'),
-      color: Color(0xFF10B981),
+      enableVibration: true,
+      vibrationPattern: vibrationPattern,
+      color: const Color(0xFFE11D48),
       ongoing: false,
       autoCancel: true,
+      channelShowBadge: true,
     );
 
-    const NotificationDetails platformDetails = NotificationDetails(android: androidDetails);
+    final NotificationDetails platformDetails = NotificationDetails(android: androidDetails);
 
     await _notificationsPlugin.show(
       id,
       title,
       body,
       platformDetails,
+    );
+  }
+
+  /// Instant test notification for user to verify on physical phone
+  static Future<void> testNotification() async {
+    await requestNotificationPermission();
+    await showCamouflagedNotification(
+      id: 8888,
+      category: 'romantic',
+      customDecoyText: 'تست موفقیت‌آمیز اعلان پزشکی: اتصال و پایش بلادرنگ فعال است',
     );
   }
 }

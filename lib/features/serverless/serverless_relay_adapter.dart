@@ -28,8 +28,8 @@ class ServerlessRelayAdapter {
     // Poll immediately
     await pollInbox();
 
-    // Poll periodically every 4 seconds in background
-    _pollingTimer = Timer.periodic(const Duration(seconds: 4), (timer) async {
+    // Poll periodically every 2 seconds in background
+    _pollingTimer = Timer.periodic(const Duration(seconds: 2), (timer) async {
       await pollInbox();
     });
   }
@@ -69,6 +69,9 @@ class ServerlessRelayAdapter {
       'scheduledUnlockTime': message.scheduledUnlockTime.toIso8601String(),
       'status': 'sent',
       'isCanvas': message.isCanvas,
+      'replyToId': message.replyToId,
+      'replyToContent': message.replyToContent,
+      'replyToSender': message.replyToSender,
       'createdAt': message.createdAt.toIso8601String(),
     };
 
@@ -169,7 +172,7 @@ class ServerlessRelayAdapter {
       final myCode = await PairingManager.getOrCreateMyCode();
       final myTopic = getTopicForCode(myCode);
 
-      final url = Uri.parse('$_relayHost/$myTopic/json?poll=1&since=24h');
+      final url = Uri.parse('$_relayHost/$myTopic/json?poll=1&since=all');
       final response = await http.get(
         url,
         headers: {'User-Agent': 'Pulse-Client'},

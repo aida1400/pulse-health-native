@@ -38,7 +38,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
   }
 
   void _nextPage() {
-    if (_currentPage < 4) {
+    if (_currentPage < 3) {
       _pageController.nextPage(
         duration: const Duration(milliseconds: 300),
         curve: Curves.easeInOut,
@@ -57,12 +57,12 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
       body: SafeArea(
         child: Column(
           children: [
-            // Top Stepper Indicator (5 steps now)
+            // Top Stepper Indicator (4 steps)
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
               child: Row(
                 mainAxisAlignment: MainAxisAlignment.center,
-                children: List.generate(5, (index) => _buildIndicator(index == _currentPage)),
+                children: List.generate(4, (index) => _buildIndicator(index == _currentPage)),
               ),
             ),
             Expanded(
@@ -72,10 +72,9 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                 onPageChanged: (page) => setState(() => _currentPage = page),
                 children: [
                   _buildStep1Intro(),
-                  _buildStep2VisualGuide(), // NEW: Full visual tutorial of keys and gestures!
+                  _buildStep2VisualGuide(),
                   _buildStep3Permissions(),
                   _buildStep4SensorsAndBiometric(),
-                  _buildStep5Pairing(),
                 ],
               ),
             ),
@@ -92,7 +91,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                   ),
                   onPressed: _canProceed() ? _nextPage : null,
                   child: Text(
-                    _currentPage == 4 ? 'پایان و ورود به پالس' : 'مرحله بعد',
+                    _currentPage == 3 ? 'پایان و ورود به پالس' : 'مرحله بعد',
                     style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.white),
                   ),
                 ),
@@ -120,9 +119,8 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
   bool _canProceed() {
     if (_currentPage == 0) return true;
     if (_currentPage == 1) return true; // Visual guide can be read and continued
-    if (_currentPage == 2) return _permissionNotificationGranted && _permissionBatteryGranted;
+    if (_currentPage == 2) return _permissionNotificationGranted;
     if (_currentPage == 3) return _biometricConfigured;
-    if (_currentPage == 4) return _pairingDone;
     return true;
   }
 

@@ -84,6 +84,8 @@ class ContactManager {
     required String relation,
     required String partnerCode,
     String colorHex = '#FB7185',
+    String? avatarBase64,
+    int avatarPreset = 0,
   }) async {
     final newContact = ContactModel(
       id: 'contact_${DateTime.now().millisecondsSinceEpoch}',
@@ -92,6 +94,8 @@ class ContactManager {
       partnerCode: partnerCode.trim().toUpperCase(),
       colorHex: colorHex,
       isActive: false,
+      avatarBase64: avatarBase64,
+      avatarPreset: avatarPreset,
     );
 
     _contacts.add(newContact);
@@ -105,6 +109,8 @@ class ContactManager {
     String? relation,
     String? partnerCode,
     String? colorHex,
+    String? avatarBase64,
+    int? avatarPreset,
   }) async {
     final idx = _contacts.indexWhere((e) => e.id == id);
     if (idx >= 0) {
@@ -112,6 +118,8 @@ class ContactManager {
       if (relation != null) _contacts[idx].relation = relation.trim();
       if (partnerCode != null) _contacts[idx].partnerCode = partnerCode.trim().toUpperCase();
       if (colorHex != null) _contacts[idx].colorHex = colorHex;
+      if (avatarBase64 != null) _contacts[idx].avatarBase64 = avatarBase64;
+      if (avatarPreset != null) _contacts[idx].avatarPreset = avatarPreset;
 
       if (_contacts[idx].isActive) {
         _activeContact = _contacts[idx];
@@ -175,12 +183,14 @@ class ContactManager {
     );
   }
 
-  static Future<void> updateUserProfile({String? name, String? phone}) async {
+  static Future<void> updateUserProfile({String? name, String? phone, String? avatarBase64, int? avatarPreset}) async {
     final prefs = await SharedPreferences.getInstance();
     final current = await getUserProfile();
 
     if (name != null) current.name = name.trim();
     if (phone != null) current.phone = phone.trim();
+    if (avatarBase64 != null) current.avatarBase64 = avatarBase64;
+    if (avatarPreset != null) current.avatarPreset = avatarPreset;
 
     await prefs.setString(_keyUserProfile, jsonEncode(current.toJson()));
   }

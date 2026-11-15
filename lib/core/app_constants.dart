@@ -4,9 +4,9 @@ class AppConstants {
   static const String appVersion = 'v2.5.0';
   static const String stealthPackage = 'com.pulse.health';
 
-  // Base Notification Decoys
-  static const String notificationChannelId = 'pulse_health_critical_channel';
-  static const String notificationChannelName = 'پایش حیاتی سلامت';
+  // Base Notification Decoys (Version 4 with Guaranteed System Sound & High Importance)
+  static const String notificationChannelId = 'pulse_health_vital_v4';
+  static const String notificationChannelName = 'پایش حیاتی علائم سلامت';
   static const String notificationChannelDescription = 'اعلان‌های سیستمی و هشدارهای پایش مداوم ضربان';
 
   // Shared Preferences Keys

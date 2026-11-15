@@ -18,6 +18,9 @@ class PulseMessageModel {
   DateTime? seenAt;
   List<String> reactions;
   bool isCanvas; // Distinctly marks Canvas Cards vs Plain Chat Bubbles
+  String? replyToId;
+  String? replyToContent;
+  String? replyToSender;
 
   PulseMessageModel({
     required this.id,
@@ -34,6 +37,9 @@ class PulseMessageModel {
     this.seenAt,
     List<String>? reactions,
     bool? isCanvas,
+    this.replyToId,
+    this.replyToContent,
+    this.replyToSender,
   })  : reactions = reactions ?? [],
         isCanvas = isCanvas ?? (particleType != 'none' && themeId != 'chat_text');
 
@@ -55,6 +61,9 @@ class PulseMessageModel {
     'seenAt': seenAt?.toIso8601String(),
     'reactions': reactions,
     'isCanvas': isCanvas,
+    'replyToId': replyToId,
+    'replyToContent': replyToContent,
+    'replyToSender': replyToSender,
   };
 
   factory PulseMessageModel.fromJson(Map<String, dynamic> json, {bool? overrideIsSender}) => PulseMessageModel(
@@ -72,6 +81,9 @@ class PulseMessageModel {
     seenAt: json['seenAt'] != null ? DateTime.parse(json['seenAt']) : null,
     reactions: (json['reactions'] as List<dynamic>?)?.map((e) => e.toString()).toList() ?? [],
     isCanvas: json['isCanvas'] ?? (json['themeId'] != 'chat_text' && (json['particleType'] ?? 'heart') != 'none'),
+    replyToId: json['replyToId'],
+    replyToContent: json['replyToContent'],
+    replyToSender: json['replyToSender'],
   );
 }
 

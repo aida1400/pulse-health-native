@@ -43,7 +43,7 @@ class _MessageComposerScreenState extends State<MessageComposerScreen> {
     {'name': 'صورتی رمانتیک', 'color': const Color(0xFF3B1425), 'hex': '#3B1425'},
     {'name': 'مشکی مخملی', 'color': const Color(0xFF0F0B18), 'hex': '#0F0B18'},
     {'name': 'بنفش نئونی', 'color': const Color(0xFF1E0B36), 'hex': '#1E0B36'},
-    {'name': 'آبی لاجوردی', 'color': const Color(0xFF0B1B2E), 'hex': '#0B1B2E'},
+    {'name': 'یاقوتی آتشین', 'color': const Color(0xFF5C071D), 'hex': '#5C071D'},
     {'name': 'زمردی تیره', 'color': const Color(0xFF0B241C), 'hex': '#0B241C'},
     {'name': 'طلایی کهربایی', 'color': const Color(0xFF2D1E0B), 'hex': '#2D1E0B'},
   ];
@@ -163,9 +163,9 @@ class _MessageComposerScreenState extends State<MessageComposerScreen> {
   Widget _buildInputBox() {
     return Container(
       decoration: BoxDecoration(
-        color: const Color(0xFF13091B),
+        color: const Color(0xFF12030A),
         borderRadius: BorderRadius.circular(18),
-        border: Border.all(color: const Color(0xFF4C1D95).withOpacity(0.4)),
+        border: Border.all(color: const Color(0xFFE11D48).withOpacity(0.3)),
       ),
       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
       child: Column(
@@ -217,7 +217,7 @@ class _MessageComposerScreenState extends State<MessageComposerScreen> {
     return Container(
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
-        color: const Color(0xFF160D22),
+        color: const Color(0xFF1A0510),
         borderRadius: BorderRadius.circular(16),
         border: Border.all(color: Colors.white.withOpacity(0.08)),
       ),
@@ -331,7 +331,7 @@ class _MessageComposerScreenState extends State<MessageComposerScreen> {
     return Container(
       margin: const EdgeInsets.only(bottom: 8),
       decoration: BoxDecoration(
-        color: const Color(0xFF140A1E),
+        color: const Color(0xFF18040E),
         borderRadius: BorderRadius.circular(14),
         border: Border.all(color: Colors.white.withOpacity(0.06)),
       ),
@@ -379,8 +379,8 @@ class _MessageComposerScreenState extends State<MessageComposerScreen> {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 12.0),
       decoration: BoxDecoration(
-        color: const Color(0xFF1B0C27),
-        border: Border(top: BorderSide(color: Colors.white.withOpacity(0.12), width: 1)),
+        color: const Color(0xFF1E0612),
+        border: Border(top: BorderSide(color: const Color(0xFFE11D48).withOpacity(0.3), width: 1)),
         boxShadow: [
           BoxShadow(
             color: Colors.black.withOpacity(0.6),

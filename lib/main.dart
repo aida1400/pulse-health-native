@@ -26,6 +26,7 @@ void main() async {
   } else {
     await TimeCapsuleService.loadVault();
   }
+  await UnkillableNotificationService.requestNotificationPermission();
   runApp(const PulseApp());
 }
 
@@ -53,6 +54,7 @@ class _PulseAppState extends State<PulseApp> with WidgetsBindingObserver {
     _checkFirstRun();
     _initSensors();
     _initRelayListener();
+    UnkillableNotificationService.requestNotificationPermission();
   }
 
   @override
@@ -129,8 +131,8 @@ class _PulseAppState extends State<PulseApp> with WidgetsBindingObserver {
         debugShowCheckedModeBanner: false,
         theme: AppTheme.decoyTheme,
         home: const Scaffold(
-          backgroundColor: Color(0xFF0A0F1D),
-          body: Center(child: CircularProgressIndicator(color: Color(0xFF10B981))),
+          backgroundColor: Color(0xFF0A0206),
+          body: Center(child: CircularProgressIndicator(color: Color(0xFFE11D48))),
         ),
       );
     }
@@ -188,102 +190,119 @@ class _PulseAppState extends State<PulseApp> with WidgetsBindingObserver {
       final activeContact = ContactManager.getActiveContact();
 
       return Scaffold(
-        backgroundColor: const Color(0xFF0E0715),
+        backgroundColor: const Color(0xFF0D0307),
         body: _selectedVaultTab == 0
             ? ChatScreen(
                 onEmergencyPanic: () => setState(() => _isSecretUnlocked = false),
                 onContactSwitched: () => setState(() {}),
               )
-            : Scaffold(
-                backgroundColor: const Color(0xFF0E0715),
-                drawer: PulseNavigationDrawer(
-                  onEmergencyPanic: () => setState(() => _isSecretUnlocked = false),
-                  onContactSwitched: () => setState(() {}),
-                ),
-                appBar: AppBar(
-                  backgroundColor: const Color(0xFF1B0B27),
-                  elevation: 0,
-                  leading: Builder(
-                    builder: (ctx) => IconButton(
-                      icon: const Icon(Icons.menu_rounded, color: Colors.white, size: 24),
-                      tooltip: 'منوی کاربری و مخاطبان (مانند اسنپ)',
-                      onPressed: () => Scaffold.of(ctx).openDrawer(),
-                    ),
+            : Directionality(
+                textDirection: TextDirection.rtl,
+                child: Scaffold(
+                  backgroundColor: const Color(0xFF0D0307),
+                  drawer: PulseNavigationDrawer(
+                    onEmergencyPanic: () => setState(() => _isSecretUnlocked = false),
+                    onContactSwitched: () => setState(() {}),
                   ),
-                  title: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        'ارسال بوم: ${activeContact?.name ?? "پارتنر"}',
-                        style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold),
+                  appBar: AppBar(
+                    backgroundColor: const Color(0xFF1A050E),
+                    elevation: 0,
+                    // Leading on the RIGHT in RTL
+                    leading: Builder(
+                      builder: (ctx) => IconButton(
+                        icon: const Icon(Icons.menu_rounded, color: Colors.white, size: 26),
+                        tooltip: 'منوی کاربری و مخاطبان (مانند اسنپ)',
+                        onPressed: () => Scaffold.of(ctx).openDrawer(),
                       ),
-                      Text(
-                        'کد متصل: ${activeContact?.partnerCode.isEmpty ?? true ? "تنظیم نشده" : activeContact!.partnerCode}',
-                        style: TextStyle(fontSize: 10, color: const Color(0xFFFB7185).withOpacity(0.9)),
+                    ),
+                    title: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'ارسال بوم: ${activeContact?.name ?? "پارتنر"}',
+                          style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold),
+                        ),
+                        Row(
+                          children: [
+                            const Text('کد: ', style: TextStyle(fontSize: 10, color: Colors.white38)),
+                            Directionality(
+                              textDirection: TextDirection.ltr,
+                              child: Text(
+                                activeContact?.partnerCode.isEmpty ?? true ? "تنظیم نشده" : activeContact!.partnerCode,
+                                style: TextStyle(
+                                  fontSize: 10.5,
+                                  color: const Color(0xFFFB7185).withOpacity(0.95),
+                                  fontFamily: 'monospace',
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ],
+                    ),
+                    actions: [
+                      IconButton(
+                        icon: const Icon(Icons.dashboard_outlined, color: Color(0xFFFB7185)),
+                        tooltip: 'داشبورد کدهای جفت‌سازی',
+                        onPressed: () => UserDashboardDialog.show(context, onDataChanged: () => setState(() {})),
+                      ),
+                      IconButton(
+                        icon: const Icon(Icons.shield_outlined, color: Color(0xFF10B981)),
+                        tooltip: 'تغییر قیافه فوری به مانیتور ضربان',
+                        onPressed: () => setState(() => _isSecretUnlocked = false),
                       ),
                     ],
                   ),
-                  actions: [
-                    IconButton(
-                      icon: const Icon(Icons.dashboard_outlined, color: Color(0xFFFB7185)),
-                      tooltip: 'داشبورد کدهای جفت‌سازی',
-                      onPressed: () => UserDashboardDialog.show(context, onDataChanged: () => setState(() {})),
-                    ),
-                    IconButton(
-                      icon: const Icon(Icons.shield_outlined, color: Color(0xFF10B981)),
-                      tooltip: 'تغییر قیافه فوری به مانیتور ضربان',
-                      onPressed: () => setState(() => _isSecretUnlocked = false),
-                    ),
-                  ],
-                ),
-                body: MessageComposerScreen(
-                  onSendMessage: ({
-                    required String content,
-                    required String category,
-                    required String themeId,
-                    required String customBgColor,
-                    required String particleType,
-                    DateTime? scheduledTime,
-                  }) async {
-                    final myCode = await PairingManager.getOrCreateMyCode();
-                    final currentPartner = ContactManager.getActiveContact();
+                  body: MessageComposerScreen(
+                    onSendMessage: ({
+                      required String content,
+                      required String category,
+                      required String themeId,
+                      required String customBgColor,
+                      required String particleType,
+                      DateTime? scheduledTime,
+                    }) async {
+                      final myCode = await PairingManager.getOrCreateMyCode();
+                      final currentPartner = ContactManager.getActiveContact();
 
-                    final capsule = PulseMessageModel(
-                      id: DateTime.now().millisecondsSinceEpoch.toString(),
-                      content: content,
-                      category: category,
-                      themeId: themeId,
-                      customBgColor: customBgColor,
-                      particleType: particleType,
-                      scheduledUnlockTime: scheduledTime ?? DateTime.now(),
-                      status: 'sent',
-                      senderCode: myCode,
-                      isSender: true,
-                      createdAt: DateTime.now(),
-                      isCanvas: true, // Marked as Romantic Canvas Card
-                    );
+                      final capsule = PulseMessageModel(
+                        id: DateTime.now().millisecondsSinceEpoch.toString(),
+                        content: content,
+                        category: category,
+                        themeId: themeId,
+                        customBgColor: customBgColor,
+                        particleType: particleType,
+                        scheduledUnlockTime: scheduledTime ?? DateTime.now(),
+                        status: 'sent',
+                        senderCode: myCode,
+                        isSender: true,
+                        createdAt: DateTime.now(),
+                        isCanvas: true, // Marked as Romantic Canvas Card
+                      );
 
-                    // 1. Save to local vault
-                    await TimeCapsuleService.saveToVault(capsule);
+                      // 1. Save to local vault
+                      await TimeCapsuleService.saveToVault(capsule);
 
-                    // 2. Real cloud dispatch to partner via ntfy relay!
-                    await ServerlessRelayAdapter.sendMessage(
-                      message: capsule,
-                      targetPartnerCode: currentPartner?.partnerCode,
-                    );
+                      // 2. Real cloud dispatch to partner via ntfy relay!
+                      await ServerlessRelayAdapter.sendMessage(
+                        message: capsule,
+                        targetPartnerCode: currentPartner?.partnerCode,
+                      );
 
-                    // 3. Open dynamic canvas preview
-                    setState(() {
-                      _activeViewingMessage = content;
-                      _activeViewingCustomBg = customBgColor;
-                      _activeViewingParticle = particleType;
-                    });
-                  },
+                      // 3. Open dynamic canvas preview
+                      setState(() {
+                        _activeViewingMessage = content;
+                        _activeViewingCustomBg = customBgColor;
+                        _activeViewingParticle = particleType;
+                      });
+                    },
+                  ),
                 ),
               ),
         bottomNavigationBar: BottomNavigationBar(
-          backgroundColor: const Color(0xFF180A22),
-          selectedItemColor: const Color(0xFFFB7185),
+          backgroundColor: const Color(0xFF16040B),
+          selectedItemColor: const Color(0xFFE11D48),
           unselectedItemColor: Colors.white38,
           currentIndex: _selectedVaultTab,
           onTap: (idx) => setState(() => _selectedVaultTab = idx),

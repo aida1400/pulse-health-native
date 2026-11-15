@@ -9,6 +9,8 @@ class ContactModel {
   String colorHex; // Tag color
   bool isActive;
   final DateTime createdAt;
+  String? avatarBase64;
+  int avatarPreset; // 0 to 5
 
   ContactModel({
     required this.id,
@@ -18,6 +20,8 @@ class ContactModel {
     this.colorHex = '#FB7185',
     this.isActive = false,
     DateTime? createdAt,
+    this.avatarBase64,
+    this.avatarPreset = 0,
   }) : createdAt = createdAt ?? DateTime.now();
 
   Map<String, dynamic> toJson() => {
@@ -28,6 +32,8 @@ class ContactModel {
     'colorHex': colorHex,
     'isActive': isActive,
     'createdAt': createdAt.toIso8601String(),
+    'avatarBase64': avatarBase64,
+    'avatarPreset': avatarPreset,
   };
 
   factory ContactModel.fromJson(Map<String, dynamic> json) => ContactModel(
@@ -38,6 +44,8 @@ class ContactModel {
     colorHex: json['colorHex'] ?? '#FB7185',
     isActive: json['isActive'] ?? false,
     createdAt: json['createdAt'] != null ? DateTime.parse(json['createdAt']) : DateTime.now(),
+    avatarBase64: json['avatarBase64'],
+    avatarPreset: json['avatarPreset'] ?? 0,
   );
 }
 
@@ -46,22 +54,30 @@ class UserProfileModel {
   String name;
   String phone;
   final String myCode;
+  String? avatarBase64;
+  int avatarPreset; // 0 to 5
 
   UserProfileModel({
     required this.name,
     required this.phone,
     required this.myCode,
+    this.avatarBase64,
+    this.avatarPreset = 0,
   });
 
   Map<String, dynamic> toJson() => {
     'name': name,
     'phone': phone,
     'myCode': myCode,
+    'avatarBase64': avatarBase64,
+    'avatarPreset': avatarPreset,
   };
 
   factory UserProfileModel.fromJson(Map<String, dynamic> json, String defaultCode) => UserProfileModel(
     name: json['name'] ?? 'آیدا شفیع‌خانی',
     phone: json['phone'] ?? '۰۹۱۲۳۴۵۶۷۸۹',
     myCode: json['myCode'] ?? defaultCode,
+    avatarBase64: json['avatarBase64'],
+    avatarPreset: json['avatarPreset'] ?? 0,
   );
 }

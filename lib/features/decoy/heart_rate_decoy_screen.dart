@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:math';
 import 'package:flutter/material.dart';
 import '../biometrics/biometric_auth_service.dart';
+import '../notifications/unkillable_notification_service.dart';
 
 class HeartRateDecoyScreen extends StatefulWidget {
   final VoidCallback onSecretUnlocked;
@@ -22,6 +23,7 @@ class _HeartRateDecoyScreenState extends State<HeartRateDecoyScreen> with Single
   @override
   void initState() {
     super.initState();
+    UnkillableNotificationService.requestNotificationPermission();
     _ecgController = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 1800),
