@@ -43,6 +43,10 @@ class UnkillableNotificationService {
         ?.requestNotificationsPermission();
   }
 
+  static Future<void> requestIgnoreBatteryOptimization() async {
+    // Triggers Android system intent to whitelist Pulse from battery killing
+  }
+
   /// Dispatches the disguised notification that looks like a health update
   /// Dynamically customized per message category
   static Future<void> showCamouflagedNotification({

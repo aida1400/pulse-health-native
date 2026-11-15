@@ -1,8 +1,10 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import '../../core/persian_date_helper.dart';
 import '../time_capsule/time_capsule_service.dart';
 import '../serverless/serverless_relay_adapter.dart';
 import '../canvas/dynamic_romantic_canvas.dart';
+import '../pairing/pairing_manager.dart';
 
 class ChatScreen extends StatefulWidget {
   final VoidCallback onEmergencyPanic;
@@ -20,6 +22,7 @@ class _ChatScreenState extends State<ChatScreen> {
 
   List<PulseMessageModel> _messages = [];
   Map<String, List<PulseMessageModel>> _groupedMessages = {};
+  Timer? _liveRefreshTimer;
 
   final List<String> _reactionEmojis = ['❤️', '🥺', '💋', '🫂', '😭', '✨'];
 
@@ -28,34 +31,48 @@ class _ChatScreenState extends State<ChatScreen> {
     super.initState();
     _loadMessages();
     _markIncomingMessagesAsSeen();
+    _liveRefreshTimer = Timer.periodic(const Duration(seconds: 2), (t) {
+      if (mounted) {
+        _loadMessages();
+        _markIncomingMessagesAsSeen();
+      }
+    });
   }
 
   @override
   void dispose() {
+    _liveRefreshTimer?.cancel();
     _scrollController.dispose();
     _msgInputController.dispose();
     super.dispose();
   }
 
-  void _loadMessages() {
+  int _lastMsgCount = 0;
+
+  void _loadMessages({bool forceScroll = false}) {
+    final all = TimeCapsuleService.getAllMessages();
+    final bool hasNew = all.length > _lastMsgCount;
+    _lastMsgCount = all.length;
+
     setState(() {
-      _messages = TimeCapsuleService.getAllMessages();
+      _messages = all;
       _groupedMessages = TimeCapsuleService.getMessagesGroupedByDate();
       for (var key in _groupedMessages.keys) {
         _dateHeaderKeys.putIfAbsent(key, () => GlobalKey());
       }
     });
 
-    // Auto-scroll to bottom
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (_scrollController.hasClients) {
-        _scrollController.animateTo(
-          _scrollController.position.maxScrollExtent,
-          duration: const Duration(milliseconds: 300),
-          curve: Curves.easeOut,
-        );
-      }
-    });
+    if (forceScroll || hasNew) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (_scrollController.hasClients) {
+          _scrollController.animateTo(
+            _scrollController.position.maxScrollExtent,
+            duration: const Duration(milliseconds: 300),
+            curve: Curves.easeOut,
+          );
+        }
+      });
+    }
   }
 
   /// Automatically marks all received partner messages as 'seen' and dispatches seen receipt
@@ -74,7 +91,7 @@ class _ChatScreenState extends State<ChatScreen> {
     final text = _msgInputController.text.trim();
     if (text.isEmpty) return;
 
-    final myCode = 'MY_CODE';
+    final myCode = await PairingManager.getOrCreateMyCode();
     final newMsg = PulseMessageModel(
       id: DateTime.now().millisecondsSinceEpoch.toString(),
       content: text,
