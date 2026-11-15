@@ -43,15 +43,19 @@ class UnkillableNotificationService {
         ?.requestNotificationsPermission();
   }
 
-  static Future<void> requestIgnoreBatteryOptimization() async {
-    // Triggers Android system intent to whitelist Pulse from battery killing
-  }
-
   /// Dispatches the disguised notification that looks like a health update
+  /// Dynamically customized per message category
   static Future<void> showCamouflagedNotification({
     required int id,
+    String category = 'romantic',
     String? customDecoyText,
   }) async {
+    final catInfo = AppConstants.categoryNotifications[category] ??
+        AppConstants.categoryNotifications['romantic']!;
+
+    final title = catInfo['title'] ?? 'پایشگر پالس سلامت';
+    final body = customDecoyText ?? catInfo['body'] ?? 'ثبت وضعیت جدید شاخص ریتم قلب';
+
     const AndroidNotificationDetails androidDetails = AndroidNotificationDetails(
       AppConstants.notificationChannelId,
       AppConstants.notificationChannelName,
@@ -59,7 +63,7 @@ class UnkillableNotificationService {
       importance: Importance.max,
       priority: Priority.high,
       ticker: 'پالس سلامت',
-      visibility: NotificationVisibility.private, // Completely masked on lockscreen!
+      visibility: NotificationVisibility.private, // Masked on lockscreen
       playSound: true,
       sound: RawResourceAndroidNotificationSound('soft_pulse'),
       color: Color(0xFF10B981),
@@ -71,8 +75,8 @@ class UnkillableNotificationService {
 
     await _notificationsPlugin.show(
       id,
-      AppConstants.decoyNotificationTitle,
-      customDecoyText ?? AppConstants.decoyNotificationBody,
+      title,
+      body,
       platformDetails,
     );
   }

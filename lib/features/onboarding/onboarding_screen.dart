@@ -50,7 +50,9 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
+    return Directionality(
+      textDirection: TextDirection.rtl,
+      child: Scaffold(
       backgroundColor: const Color(0xFF0A0F1D),
       body: SafeArea(
         child: Column(
@@ -99,7 +101,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
           ],
         ),
       ),
-    );
+    ));
   }
 
   Widget _buildIndicator(bool isActive) {

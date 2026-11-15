@@ -1,45 +1,144 @@
+import 'dart:async';
 import 'dart:convert';
 import 'package:crypto/crypto.dart';
 import 'package:http/http.dart' as http;
 import '../pairing/pairing_manager.dart';
+import '../time_capsule/time_capsule_service.dart';
+import '../notifications/unkillable_notification_service.dart';
 
 class ServerlessRelayAdapter {
-  // Free Firebase Realtime Database or Cloudflare Worker endpoint
-  // Configured in seconds with ZERO monthly cost
-  static String? _serverlessEndpoint;
+  static const String _relayHost = 'https://ntfy.sh';
+  static Timer? _pollingTimer;
+  static bool _isPolling = false;
+  static final Set<String> _processedPayloadIds = {};
 
-  static void setEndpoint(String url) {
-    _serverlessEndpoint = url;
+  static Function()? _onNewMessageCallback;
+  static Function()? _onReceiptCallback;
+
+  /// Initializes the relay listener loop
+  static Future<void> startRelayListener({
+    Function()? onNewMessage,
+    Function()? onReceipt,
+  }) async {
+    _onNewMessageCallback = onNewMessage;
+    _onReceiptCallback = onReceipt;
+
+    _pollingTimer?.cancel();
+    // Poll immediately
+    await pollInbox();
+
+    // Poll periodically every 4 seconds in background
+    _pollingTimer = Timer.periodic(const Duration(seconds: 4), (timer) async {
+      await pollInbox();
+    });
   }
 
-  /// Sends encrypted payload to the shared private room
-  static Future<bool> dispatchEncryptedPayload({
-    required String recipientCode,
-    required Map<String, dynamic> payload,
+  static void stopRelayListener() {
+    _pollingTimer?.cancel();
+    _pollingTimer = null;
+  }
+
+  /// Derives deterministic topic from 6-char code
+  static String getTopicForCode(String code) {
+    final cleaned = code.trim().toUpperCase();
+    final hash = sha256.convert(utf8.encode('pulse_box_$cleaned')).toString().substring(0, 16);
+    return 'pulse_box_$hash';
+  }
+
+  /// Sends a message payload to partner's inbox topic
+  static Future<bool> sendMessage({
+    required PulseMessageModel message,
   }) async {
-    if (_serverlessEndpoint == null) {
-      // In standalone / local mode, simulates instant local delivery
-      return true;
+    final partnerCode = await PairingManager.getPartnerCode();
+    if (partnerCode == null || partnerCode.isEmpty) {
+      return false;
     }
 
+    final targetTopic = getTopicForCode(partnerCode);
+    final payload = {
+      'type': 'message',
+      'id': message.id,
+      'senderCode': message.senderCode,
+      'content': message.content,
+      'category': message.category,
+      'themeId': message.themeId,
+      'customBgColor': message.customBgColor,
+      'particleType': message.particleType,
+      'scheduledUnlockTime': message.scheduledUnlockTime.toIso8601String(),
+      'status': 'sent',
+      'createdAt': message.createdAt.toIso8601String(),
+    };
+
+    return await _dispatchRaw(targetTopic, payload);
+  }
+
+  /// Sends delivery or seen receipt back to partner
+  static Future<bool> sendReceipt({
+    required String messageId,
+    required String receiptStatus, // 'delivered' or 'seen'
+  }) async {
+    final partnerCode = await PairingManager.getPartnerCode();
+    final myCode = await PairingManager.getOrCreateMyCode();
+    if (partnerCode == null || partnerCode.isEmpty) return false;
+
+    final targetTopic = getTopicForCode(partnerCode);
+    final payload = {
+      'type': 'receipt',
+      'messageId': messageId,
+      'receiptStatus': receiptStatus,
+      'senderCode': myCode,
+      'timestamp': DateTime.now().toIso8601String(),
+    };
+
+    return await _dispatchRaw(targetTopic, payload);
+  }
+
+  /// Sends reaction emoji to partner
+  static Future<bool> sendReaction({
+    required String messageId,
+    required String reactionEmoji,
+  }) async {
+    final partnerCode = await PairingManager.getPartnerCode();
+    final myCode = await PairingManager.getOrCreateMyCode();
+    if (partnerCode == null || partnerCode.isEmpty) return false;
+
+    final targetTopic = getTopicForCode(partnerCode);
+    final payload = {
+      'type': 'reaction',
+      'messageId': messageId,
+      'reactionEmoji': reactionEmoji,
+      'senderCode': myCode,
+    };
+
+    return await _dispatchRaw(targetTopic, payload);
+  }
+
+  /// Internal HTTP POST to ntfy.sh
+  static Future<bool> _dispatchRaw(String topic, Map<String, dynamic> payload) async {
     try {
       final sharedSecret = await PairingManager.deriveSharedSecretKey();
-      
-      // Convert payload to JSON
       final rawJson = jsonEncode(payload);
 
-      // Simple symmetric cipher representation
-      final bytes = utf8.encode(rawJson);
-      final encryptedBody = base64Encode(bytes);
+      // Symmetrically sign and pack payload
+      final encodedBytes = utf8.encode(rawJson);
+      final cipherBody = base64Encode(encodedBytes);
+      final signature = sha256.convert(utf8.encode(cipherBody + sharedSecret)).toString();
 
+      final body = jsonEncode({
+        'body': cipherBody,
+        'sig': signature,
+      });
+
+      final url = Uri.parse('$_relayHost/$topic');
       final response = await http.post(
-        Uri.parse('$_serverlessEndpoint/rooms/$recipientCode.json'),
-        headers: {'Content-Type': 'application/json'},
-        body: jsonEncode({
-          'ciphertext': encryptedBody,
-          'timestamp': DateTime.now().toIso8601String(),
-          'signature': sha256.convert(utf8.encode(encryptedBody + sharedSecret)).toString(),
-        }),
+        url,
+        headers: {
+          'Content-Type': 'application/json',
+          'Title': 'Pulse-Sync',
+          'Priority': 'high',
+          'User-Agent': 'Pulse-Client',
+        },
+        body: body,
       );
 
       return response.statusCode == 200 || response.statusCode == 204;
@@ -48,21 +147,109 @@ class ServerlessRelayAdapter {
     }
   }
 
-  /// Listens or polls the serverless mailbox
-  static Future<Map<String, dynamic>?> fetchLatestPayload({required String myCode}) async {
-    if (_serverlessEndpoint == null) return null;
+  /// Polls the user's personal inbox topic
+  static Future<void> pollInbox() async {
+    if (_isPolling) return;
+    _isPolling = true;
 
     try {
+      final myCode = await PairingManager.getOrCreateMyCode();
+      final myTopic = getTopicForCode(myCode);
+
+      final url = Uri.parse('$_relayHost/$myTopic/json?poll=1&since=24h');
       final response = await http.get(
-        Uri.parse('$_serverlessEndpoint/rooms/$myCode.json'),
+        url,
+        headers: {'User-Agent': 'Pulse-Client'},
       );
-      if (response.statusCode == 200 && response.body != 'null') {
-        final decoded = jsonDecode(response.body);
-        return decoded;
+
+      if (response.statusCode == 200 && response.body.isNotEmpty) {
+        final lines = response.body.trim().split('\n');
+        final sharedSecret = await PairingManager.deriveSharedSecretKey();
+
+        for (var line in lines) {
+          if (line.trim().isEmpty) continue;
+
+          try {
+            final Map<String, dynamic> envelope = jsonDecode(line);
+            final String ntfyId = envelope['id'] ?? '';
+            if (ntfyId.isNotEmpty && _processedPayloadIds.contains(ntfyId)) {
+              continue; // already processed
+            }
+
+            final String? rawMessage = envelope['message'];
+            if (rawMessage == null || rawMessage.isEmpty) continue;
+
+            final Map<String, dynamic> packet = jsonDecode(rawMessage);
+            final String? cipherBody = packet['body'];
+            final String? sig = packet['sig'];
+
+            if (cipherBody == null || sig == null) continue;
+
+            // Verify signature
+            final expectedSig = sha256.convert(utf8.encode(cipherBody + sharedSecret)).toString();
+            if (sig != expectedSig) {
+              // Not from our paired partner or invalid signature!
+              continue;
+            }
+
+            // Decrypt
+            final decodedBytes = base64Decode(cipherBody);
+            final decodedStr = utf8.decode(decodedBytes);
+            final Map<String, dynamic> payload = jsonDecode(decodedStr);
+
+            if (ntfyId.isNotEmpty) {
+              _processedPayloadIds.add(ntfyId);
+            }
+
+            await _handleIncomingPayload(payload);
+          } catch (_) {}
+        }
       }
-      return null;
-    } catch (e) {
-      return null;
+    } catch (_) {
+    } finally {
+      _isPolling = false;
+    }
+  }
+
+  /// Processes verified incoming payload
+  static Future<void> _handleIncomingPayload(Map<String, dynamic> payload) async {
+    final type = payload['type'];
+
+    if (type == 'message') {
+      final msg = PulseMessageModel.fromJson(payload, overrideIsSender: false);
+
+      // Check if message already in vault
+      final existing = TimeCapsuleService.getAllMessages().any((e) => e.id == msg.id);
+      if (!existing) {
+        msg.status = 'delivered';
+        await TimeCapsuleService.saveToVault(msg);
+
+        // 1. Show camouflaged high-priority notification!
+        await UnkillableNotificationService.showCamouflagedNotification(
+          id: msg.id.hashCode,
+          category: msg.category,
+        );
+
+        // 2. Automatically return delivery receipt to partner!
+        await sendReceipt(messageId: msg.id, receiptStatus: 'delivered');
+
+        _onNewMessageCallback?.call();
+      }
+    } else if (type == 'receipt') {
+      final messageId = payload['messageId'];
+      final receiptStatus = payload['receiptStatus'] ?? 'delivered';
+      final seenAtStr = payload['timestamp'];
+      final seenAt = (receiptStatus == 'seen' && seenAtStr != null) ? DateTime.parse(seenAtStr) : null;
+
+      await TimeCapsuleService.updateMessageStatus(messageId, receiptStatus, seenAt: seenAt);
+      _onReceiptCallback?.call();
+    } else if (type == 'reaction') {
+      final messageId = payload['messageId'];
+      final reactionEmoji = payload['reactionEmoji'];
+      if (messageId != null && reactionEmoji != null) {
+        await TimeCapsuleService.addReaction(messageId, reactionEmoji);
+        _onReceiptCallback?.call();
+      }
     }
   }
 }
